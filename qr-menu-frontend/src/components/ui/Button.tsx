@@ -1,11 +1,12 @@
 import React from 'react';
 import { LucideIcon } from 'lucide-react';
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
   icon?: LucideIcon;
+  fullWidth?: boolean;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -14,6 +15,7 @@ export const Button: React.FC<ButtonProps> = ({
   size = 'md',
   isLoading = false,
   icon: Icon,
+  fullWidth = false,
   className = '',
   disabled,
   ...props
@@ -36,7 +38,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <button
-      className={`${baseStyles} ${sizeStyles[size]} ${variantStyles[variant]} ${className}`}
+      className={`${baseStyles} ${sizeStyles[size]} ${variantStyles[variant]} ${fullWidth ? 'w-full' : ''} ${className}`}
       disabled={disabled || isLoading}
       {...props}
     >

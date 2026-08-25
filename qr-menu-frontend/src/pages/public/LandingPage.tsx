@@ -343,7 +343,7 @@ export const LandingPage: React.FC = () => {
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               onClick={toggleTheme}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 text-xs font-bold text-slate-200 transition-all shadow-inner hover:border-amber-400/50 group"
+              className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 text-xs font-bold text-slate-200 transition-all shadow-inner hover:border-amber-400/50 group"
               title={`Switch to ${isLight ? 'Dark' : 'Light'} Mode`}
             >
               {isLight ? (
@@ -352,7 +352,7 @@ export const LandingPage: React.FC = () => {
                   <span className="hidden sm:inline text-[11px] font-semibold text-slate-300 group-hover:text-white">
                     Light
                   </span>
-                  <span className="text-[9px] text-amber-400 font-extrabold uppercase tracking-wide bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                  <span className="hidden sm:inline text-[9px] text-amber-400 font-extrabold uppercase tracking-wide bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                     Switch to Dark
                   </span>
                 </>
@@ -362,7 +362,7 @@ export const LandingPage: React.FC = () => {
                   <span className="hidden sm:inline text-[11px] font-semibold text-slate-300 group-hover:text-white">
                     Dark
                   </span>
-                  <span className="text-[9px] text-purple-300 font-extrabold uppercase tracking-wide bg-purple-500/15 px-1.5 py-0.5 rounded border border-purple-500/30">
+                  <span className="hidden sm:inline text-[9px] text-purple-300 font-extrabold uppercase tracking-wide bg-purple-500/15 px-1.5 py-0.5 rounded border border-purple-500/30">
                     Switch to Light
                   </span>
                 </>
@@ -382,7 +382,8 @@ export const LandingPage: React.FC = () => {
               </motion.div>
             </Link>
 
-            <Link to="/login">
+            {/* Sign In — hidden on mobile (available in hamburger drawer) */}
+            <Link to="/login" className="hidden sm:block">
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <Button
                   variant="outline"
@@ -394,7 +395,8 @@ export const LandingPage: React.FC = () => {
               </motion.div>
             </Link>
 
-            <Link to="/register">
+            {/* Free Trial — hidden on mobile (available in hamburger drawer) */}
+            <Link to="/register" className="hidden sm:block">
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
                 <Button
                   variant="primary"

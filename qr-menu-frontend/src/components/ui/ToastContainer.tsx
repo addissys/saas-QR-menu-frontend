@@ -1,9 +1,11 @@
 import React from 'react';
-import { useToast } from '../../context/ToastContext';
+import { useToastStore } from '../../store/useToastStore';
+
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
 
 export const ToastContainer: React.FC = () => {
-  const { toasts, removeToast } = useToast();
+  const { toasts, removeToast } = useToastStore();
+
 
   if (toasts.length === 0) return null;
 
@@ -29,7 +31,7 @@ export const ToastContainer: React.FC = () => {
           className={`flex items-center gap-3 p-4 rounded-xl border shadow-lg backdrop-blur-md transition-all duration-300 animate-in slide-in-from-bottom-5 pointer-events-auto ${borders[toast.type]}`}
         >
           {icons[toast.type]}
-          <p className="text-sm font-medium flex-1">{toast.text}</p>
+          <p className="text-sm font-medium flex-1">{toast.message}</p>
           <button
             onClick={() => removeToast(toast.id)}
             className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-black/5"
