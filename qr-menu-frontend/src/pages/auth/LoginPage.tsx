@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { useAuthStore } from '../../store/useAuthStore';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Mail, Lock, QrCode, ArrowLeft } from 'lucide-react';
@@ -12,8 +13,8 @@ export const LoginPage: React.FC = () => {
   const { showToast } = useToast();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState('owner@habeshaheritage.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,15 +23,17 @@ export const LoginPage: React.FC = () => {
     try {
       await login(email, password);
       showToast('Welcome back! Signed in successfully.', 'success');
-      if (email.includes('admin')) {
+      // Role-based redirect using store state (set during login)
+      const user = useAuthStore.getState().user;
+      if (user?.role === 'SUPER_ADMIN') {
         navigate('/admin/dashboard');
-      } else if (email.includes('staff')) {
-        navigate('/menu-items');
       } else {
         navigate('/dashboard');
       }
-    } catch (err) {
-      showToast('Invalid credentials provided', 'error');
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message || 'Invalid credentials. Please try again.';
+      showToast(msg, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -83,6 +86,7 @@ export const LoginPage: React.FC = () => {
             icon={Mail}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            placeholder="owner@restaurant.com"
             required
           />
 
@@ -92,6 +96,7 @@ export const LoginPage: React.FC = () => {
             icon={Lock}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            placeholder="Your password"
             required
           />
 

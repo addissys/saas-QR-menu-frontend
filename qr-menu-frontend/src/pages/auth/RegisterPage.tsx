@@ -5,14 +5,13 @@ import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
-import { Store, User, Mail, Lock, Phone, QrCode, ArrowLeft } from 'lucide-react';
+import { User, Mail, Lock, Phone, QrCode, ArrowLeft } from 'lucide-react';
 
 export const RegisterPage: React.FC = () => {
   const { register } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
-  const [businessName, setBusinessName] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,11 +22,15 @@ export const RegisterPage: React.FC = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await register({ businessName, fullName, email, password, phone });
-      showToast('Account registered successfully!', 'success');
-      navigate('/dashboard');
-    } catch (err) {
-      showToast('Registration failed', 'error');
+      // Backend accepts: { full_name, email, password, phone? }
+      // The store maps fullName → full_name internally
+      await register({ fullName, email, password, phone: phone || undefined });
+      showToast('Account created! Please sign in to continue.', 'success');
+      navigate('/login');
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message || 'Registration failed. Please try again.';
+      showToast(msg, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -67,24 +70,15 @@ export const RegisterPage: React.FC = () => {
           >
             <QrCode className="h-8 w-8" />
           </motion.div>
-          <h1 className="text-2xl font-black text-slate-900">Register Restaurant</h1>
+          <h1 className="text-2xl font-black text-slate-900">Create Your Account</h1>
           <p className="text-xs text-slate-500">
-            Create your multi-branch digital menu SaaS account
+            Register as a restaurant owner to get started
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            label="Business / Restaurant Name *"
-            placeholder="e.g. Bella Italia Bistro"
-            icon={Store}
-            value={businessName}
-            onChange={(e) => setBusinessName(e.target.value)}
-            required
-          />
-
-          <Input
-            label="Owner Full Name *"
+            label="Full Name *"
             placeholder="John Doe"
             icon={User}
             value={fullName}
@@ -93,7 +87,7 @@ export const RegisterPage: React.FC = () => {
           />
 
           <Input
-            label="Work Email Address *"
+            label="Email Address *"
             type="email"
             placeholder="owner@restaurant.com"
             icon={Mail}
@@ -104,7 +98,7 @@ export const RegisterPage: React.FC = () => {
 
           <Input
             label="Phone Number"
-            placeholder="+1 (555) 019-2834"
+            placeholder="+251911000000"
             icon={Phone}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
@@ -113,7 +107,7 @@ export const RegisterPage: React.FC = () => {
           <Input
             label="Password *"
             type="password"
-            placeholder="At least 6 characters"
+            placeholder="At least 8 characters"
             icon={Lock}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -128,7 +122,7 @@ export const RegisterPage: React.FC = () => {
               className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold shadow-lg shadow-amber-500/20"
               isLoading={isLoading}
             >
-              Create Business Portal
+              Create Account
             </Button>
           </motion.div>
         </form>

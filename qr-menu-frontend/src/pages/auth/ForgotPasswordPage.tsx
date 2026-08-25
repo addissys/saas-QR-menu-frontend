@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useToast } from '../../hooks/useToast';
+import { authApi } from '../../api/auth.api';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Mail, ArrowLeft, QrCode } from 'lucide-react';
@@ -9,11 +10,21 @@ export const ForgotPasswordPage: React.FC = () => {
   const { showToast } = useToast();
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    showToast('Password reset link dispatched to your email', 'success');
+    setIsLoading(true);
+    try {
+      // POST /api/v1/auth/forgot-password
+      await authApi.forgotPassword(email);
+      setSubmitted(true);
+    } catch (err: any) {
+
+      showToast('Something went wrong. Please try again later.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -45,10 +56,17 @@ export const ForgotPasswordPage: React.FC = () => {
               icon={Mail}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="owner@restaurant.com"
               required
             />
 
-            <Button type="submit" variant="primary" size="md" className="w-full py-3">
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              className="w-full py-3"
+              isLoading={isLoading}
+            >
               Send Recovery Link
             </Button>
           </form>

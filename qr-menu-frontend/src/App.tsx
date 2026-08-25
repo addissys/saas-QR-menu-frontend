@@ -31,8 +31,8 @@ import { CategoriesListPage } from './pages/categories/CategoriesListPage';
 import { MenuItemsListPage } from './pages/menu-items/MenuItemsListPage';
 import { NotificationsPage } from './pages/notifications/NotificationsPage';
 import { AuditLogsPage } from './pages/audit-logs/AuditLogsPage';
-import { UserProfilePage } from './pages/profile/UserProfilePage';
-import { ChangePasswordPage } from './pages/profile/ChangePasswordPage';
+import { UserProfilePage } from './pages/Profile/UserProfilePage';
+import { ChangePasswordPage } from './pages/Profile/ChangePasswordPage';
 
 // Super Admin Pages
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';

@@ -1,90 +1,69 @@
-import { mockStore } from '../services/mockStore';
-import { User } from '../types';
-
-export interface AuthResponse {
-  user: User;
-  token: string;
-}
+import api from './axios';
 
 export const authApi = {
-  login: async (email: string, password: string): Promise<{ data: AuthResponse }> => {
-    const foundUser = mockStore.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-    if (foundUser) {
-      const token = `mock-token-${foundUser.id}-${Date.now()}`;
-      localStorage.setItem('qr_token', token);
-      localStorage.setItem('qr_user', JSON.stringify(foundUser));
-      return { data: { user: foundUser, token } };
-    }
-
-    const newUser: User = {
-      id: `user-${Date.now()}`,
-      tenantId: 'tenant-1',
-      email,
-      fullName: email.split('@')[0],
-      role: email.includes('admin') ? 'SUPER_ADMIN' : 'RESTAURANT_OWNER',
-      isActive: true,
-      createdAt: new Date().toISOString(),
-    };
-    const token = `mock-token-${newUser.id}`;
-    localStorage.setItem('qr_token', token);
-    localStorage.setItem('qr_user', JSON.stringify(newUser));
-    return { data: { user: newUser, token } };
+  // POST /api/v1/auth/login
+  // Response: { success, message, data: { user, access_token, refresh_token } }
+  login: async (email: string, password: string) => {
+    const res = await api.post('/auth/login', { email, password });
+    return res.data;
   },
 
+  // POST /api/v1/auth/register
+  // Accepts: { full_name, email, password, phone? }
+  // Response: { success, message, data: { user } }
   register: async (payload: {
-    businessName: string;
-    fullName: string;
+    full_name: string;
     email: string;
     password: string;
     phone?: string;
-  }): Promise<{ data: AuthResponse }> => {
-    const newTenant = {
-      ...mockStore.tenant,
-      id: `tenant-${Date.now()}`,
-      businessName: payload.businessName,
-      createdAt: new Date().toISOString(),
-    };
-    mockStore.tenant = newTenant;
-
-    const newUser: User = {
-      id: `user-${Date.now()}`,
-      tenantId: newTenant.id,
-      email: payload.email,
-      fullName: payload.fullName,
-      phone: payload.phone,
-      role: 'RESTAURANT_OWNER',
-      isActive: true,
-      createdAt: new Date().toISOString(),
-    };
-    mockStore.users = [...mockStore.users, newUser];
-
-    const token = `mock-token-${newUser.id}`;
-    localStorage.setItem('qr_token', token);
-    localStorage.setItem('qr_user', JSON.stringify(newUser));
-    return { data: { user: newUser, token } };
+  }) => {
+    const res = await api.post('/auth/register', payload);
+    return res.data;
   },
 
-  getCurrentUser: async (): Promise<{ data: User }> => {
-    const saved = localStorage.getItem('qr_user');
-    if (saved) {
-      return { data: JSON.parse(saved) };
-    }
-    return { data: mockStore.users[0] };
+  // GET /api/v1/auth/me
+  // Response: { success, message, data: { user } }
+  getCurrentUser: async () => {
+    const res = await api.get('/auth/me');
+    return res.data;
   },
 
-  getAllUsers: async (): Promise<{ data: User[] }> => {
-    return { data: mockStore.users };
+  // POST /api/v1/auth/logout
+  logout: async () => {
+    const res = await api.post('/auth/logout');
+    return res.data;
   },
 
-  forgotPassword: async (email: string): Promise<{ data: { success: boolean } }> => {
-    return { data: { success: true } };
+  // POST /api/v1/auth/refresh-token
+  // Accepts: { refresh_token }
+  // Response: { success, message, data: { access_token } }
+  refreshToken: async (refresh_token: string) => {
+    const res = await api.post('/auth/refresh-token', { refresh_token });
+    return res.data;
   },
 
-  resetPassword: async (token: string, newPassword: string): Promise<{ data: { success: boolean } }> => {
-    return { data: { success: true } };
+  // PATCH /api/v1/auth/change-password
+  changePassword: async (current_password: string, new_password: string) => {
+    const res = await api.patch('/auth/change-password', { current_password, new_password });
+    return res.data;
   },
 
-  changePassword: async (oldPass: string, newPass: string): Promise<{ data: { success: boolean } }> => {
-    return { data: { success: true } };
+  // POST /api/v1/auth/forgot-password
+  forgotPassword: async (email: string) => {
+    const res = await api.post('/auth/forgot-password', { email });
+    return res.data;
+  },
+
+  // POST /api/v1/auth/reset-password
+  // Accepts: { token, new_password, confirm_password }
+  resetPassword: async (payload: { token: string; new_password: string; confirm_password: string }) => {
+    const res = await api.post('/auth/reset-password', payload);
+    return res.data;
+  },
+
+  // GET /api/v1/users
+  getAllUsers: async () => {
+    const res = await api.get('/users');
+    return res.data;
   },
 };

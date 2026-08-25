@@ -1,4 +1,12 @@
-export type UserRole = 'SUPER_ADMIN' | 'RESTAURANT_OWNER' | 'EXECUTIVE' | 'BRANCH_MANAGER' | 'STAFF' | 'OWNER';
+// Backend roles: SUPER_ADMIN, CAFE_OWNER, BRANCH_MANAGER, STAFF, EXECUTIVE
+export type UserRole =
+  | 'SUPER_ADMIN'
+  | 'CAFE_OWNER'
+  | 'RESTAURANT_OWNER'
+  | 'EXECUTIVE'
+  | 'BRANCH_MANAGER'
+  | 'STAFF'
+  | 'OWNER';
 
 export interface User {
   id: string;
@@ -6,6 +14,7 @@ export interface User {
   email: string;
   fullName: string;
   phone?: string;
+  profileImage?: string;
   role: UserRole;
   assignedBranchIds?: string[];
   isActive: boolean;

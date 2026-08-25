@@ -1,53 +1,81 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { User } from '../types';
+import { User, UserRole } from '../types';
 import { authApi } from '../api/auth.api';
+
+// ─── Helper: map raw backend user (snake_case) → frontend User (camelCase) ──────
+const mapRawUser = (raw: any): User => ({
+  id: raw.id,
+  email: raw.email,
+  fullName: raw.full_name ?? raw.fullName ?? '',
+  phone: raw.phone ?? undefined,
+  profileImage: raw.profile_image ?? undefined,
+  role: (typeof raw.role === 'object' ? raw.role?.name : raw.role) as UserRole,
+  tenantId: raw.owned_tenants?.[0]?.id ?? raw.tenantId ?? '',
+  isActive: raw.is_active ?? raw.isActive ?? true,
+  createdAt: raw.created_at ?? raw.createdAt ?? new Date().toISOString(),
+});
 
 interface AuthState {
   user: User | null;
-  token: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  setUser: (user: User | null) => void;
   login: (email: string, pass: string) => Promise<void>;
-  register: (data: any) => Promise<void>;
-  logout: () => void;
+  register: (data: {
+    fullName: string;
+    email: string;
+    password: string;
+    phone?: string;
+  }) => Promise<void>;
+  logout: () => Promise<void>;
   initAuth: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
-      token: null,
+      accessToken: null,
+      refreshToken: null,
       isAuthenticated: false,
       isLoading: true,
 
-      setUser: (user) => set({ user, isAuthenticated: !!user }),
-
+      // ── Initialize auth state from stored token on app boot ──────────────────
       initAuth: async () => {
-        const { token, user } = get();
-        if (token && user) {
-          // Already rehydrated from localStorage by persist middleware
-          set({ isLoading: false });
+        const token = localStorage.getItem('qr_access_token');
+        if (!token) {
+          set({ isLoading: false, isAuthenticated: false, user: null });
           return;
         }
         try {
-          // Load default/mock user when no token exists
+          // Backend: GET /auth/me → { success, message, data: { user } }
           const res = await authApi.getCurrentUser();
-          set({ user: res.data, isAuthenticated: true, isLoading: false });
+          const rawUser = res.data?.user ?? res.data;
+          const user = mapRawUser(rawUser);
+          set({ user, isAuthenticated: true, isLoading: false });
         } catch {
-          set({ user: null, token: null, isAuthenticated: false, isLoading: false });
+          localStorage.removeItem('qr_access_token');
+          localStorage.removeItem('qr_refresh_token');
+          set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false });
         }
       },
 
+      // ── Login ────────────────────────────────────────────────────────────────
       login: async (email: string, pass: string) => {
         set({ isLoading: true });
         try {
+          // Backend: POST /auth/login → { success, message, data: { user, access_token, refresh_token } }
           const res = await authApi.login(email, pass);
+          const { user: rawUser, access_token, refresh_token } = res.data;
+          localStorage.setItem('qr_access_token', access_token);
+          localStorage.setItem('qr_refresh_token', refresh_token);
+          const user = mapRawUser(rawUser);
           set({
-            user: res.data.user,
-            token: res.data.token,
+            user,
+            accessToken: access_token,
+            refreshToken: refresh_token,
             isAuthenticated: true,
             isLoading: false,
           });
@@ -57,36 +85,40 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      register: async (data: any) => {
+      // ── Register ─────────────────────────────────────────────────────────────
+      register: async (data) => {
         set({ isLoading: true });
         try {
-          const res = await authApi.register(data);
-          set({
-            user: res.data.user,
-            token: res.data.token,
-            isAuthenticated: true,
-            isLoading: false,
+          // Backend: POST /auth/register → { success, message, data: { user } }
+          // Maps camelCase frontend fields → snake_case backend fields
+          await authApi.register({
+            full_name: data.fullName,
+            email: data.email,
+            password: data.password,
+            phone: data.phone,
           });
+          set({ isLoading: false });
         } catch (error) {
           set({ isLoading: false });
           throw error;
         }
       },
 
-      logout: () => {
-        set({ user: null, token: null, isAuthenticated: false });
+      // ── Logout ───────────────────────────────────────────────────────────────
+      logout: async () => {
+        try {
+          await authApi.logout();
+        } catch {
+          // Continue client-side logout even if backend call fails
+        }
+        localStorage.removeItem('qr_access_token');
+        localStorage.removeItem('qr_refresh_token');
+        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false });
       },
     }),
     {
       name: 'qr_auth_storage',
-      // Only persist user and token to localStorage; keep loading state fresh
-      partialize: (state) => ({ user: state.user, token: state.token }),
-      onRehydrateStorage: () => (state) => {
-        // Once rehydration completes, mark loading as false
-        if (state) {
-          state.isLoading = false;
-        }
-      },
+      partialize: (state) => ({ user: state.user, accessToken: state.accessToken }),
     }
   )
 );
