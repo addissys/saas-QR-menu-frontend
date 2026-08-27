@@ -1,27 +1,47 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import axios from 'axios';
 import { useToast } from '../../hooks/useToast';
 import { authApi } from '../../api/auth.api';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Mail, ArrowLeft, QrCode } from 'lucide-react';
 
+const forgotSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+});
+
+type ForgotFormValues = z.infer<typeof forgotSchema>;
+
 export const ForgotPasswordPage: React.FC = () => {
   const { showToast } = useToast();
-  const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ForgotFormValues>({
+    resolver: zodResolver(forgotSchema),
+  });
+
+  const onSubmit = async (data: ForgotFormValues) => {
     setIsLoading(true);
     try {
-      // POST /api/v1/auth/forgot-password
-      await authApi.forgotPassword(email);
+      await authApi.forgotPassword(data.email);
+      setSubmittedEmail(data.email);
       setSubmitted(true);
-    } catch (err: any) {
-
-      showToast('Something went wrong. Please try again later.', 'error');
+    } catch (err: unknown) {
+      let msg = 'Something went wrong. Please try again later.';
+      if (axios.isAxiosError(err)) {
+        msg = err.response?.data?.message || msg;
+      }
+      showToast(msg, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -43,22 +63,25 @@ export const ForgotPasswordPage: React.FC = () => {
         {submitted ? (
           <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs space-y-3 text-center">
             <p className="font-bold">Instructions Dispatched!</p>
-            <p>If an account exists for {email}, you will receive a reset link shortly.</p>
+            <p>If an account exists for {submittedEmail}, you will receive a reset link shortly.</p>
             <Link to="/login" className="inline-block pt-2 font-bold text-purple-600 hover:underline">
               Return to Login
             </Link>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Input
-              label="Email Address"
-              type="email"
-              icon={Mail}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="owner@restaurant.com"
-              required
-            />
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div>
+              <Input
+                label="Email Address"
+                type="email"
+                icon={Mail}
+                placeholder="owner@restaurant.com"
+                {...register('email')}
+              />
+              {errors.email && (
+                <p className="text-red-500 text-[11px] mt-1 font-medium">{errors.email.message}</p>
+              )}
+            </div>
 
             <Button
               type="submit"

@@ -1,56 +1,67 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import axios from 'axios';
 import { useToast } from '../../hooks/useToast';
 import { authApi } from '../../api/auth.api';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Lock, QrCode, ArrowLeft } from 'lucide-react';
 
+const resetPasswordSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+      .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+
+type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
+
 export const ResetPasswordPage: React.FC = () => {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-
-  
   const token = searchParams.get('token') ?? '';
 
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ResetPasswordFormValues>({
+    resolver: zodResolver(resetPasswordSchema),
+  });
 
+  const onSubmit = async (data: ResetPasswordFormValues) => {
     if (!token) {
       showToast('Invalid or missing reset token. Please request a new link.', 'error');
       return;
     }
 
-    if (password !== confirmPassword) {
-      showToast('Passwords do not match', 'error');
-      return;
-    }
-
-    if (password.length < 8) {
-      showToast('Password must be at least 8 characters', 'error');
-      return;
-    }
-
     setIsLoading(true);
     try {
-      // POST /api/v1/auth/reset-password
-      // Accepts: { token, new_password, confirm_password }
       await authApi.resetPassword({
         token,
-        new_password: password,
-        confirm_password: confirmPassword,
+        new_password: data.password,
+        confirm_password: data.confirmPassword,
       });
       showToast('Password updated successfully! Please sign in.', 'success');
       navigate('/login');
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        'Failed to reset password. The link may have expired.';
+    } catch (err: unknown) {
+      let msg = 'Failed to reset password. The link may have expired.';
+      if (axios.isAxiosError(err)) {
+        msg = err.response?.data?.message || msg;
+      }
       showToast(msg, 'error');
     } finally {
       setIsLoading(false);
@@ -80,26 +91,32 @@ export const ResetPasswordPage: React.FC = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="New Password"
-            type="password"
-            icon={Lock}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 8 characters"
-            required
-          />
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <Input
+              label="New Password"
+              type="password"
+              icon={Lock}
+              placeholder="At least 8 chars, 1 uppercase, 1 symbol"
+              {...register('password')}
+            />
+            {errors.password && (
+              <p className="text-red-500 text-[11px] mt-1 font-medium">{errors.password.message}</p>
+            )}
+          </div>
 
-          <Input
-            label="Confirm New Password"
-            type="password"
-            icon={Lock}
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Repeat your new password"
-            required
-          />
+          <div>
+            <Input
+              label="Confirm New Password"
+              type="password"
+              icon={Lock}
+              placeholder="Repeat your new password"
+              {...register('confirmPassword')}
+            />
+            {errors.confirmPassword && (
+              <p className="text-red-500 text-[11px] mt-1 font-medium">{errors.confirmPassword.message}</p>
+            )}
+          </div>
 
           <Button
             type="submit"

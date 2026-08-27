@@ -3,8 +3,25 @@ import { persist } from 'zustand/middleware';
 import { User, UserRole } from '../types';
 import { authApi } from '../api/auth.api';
 
-// ─── Helper: map raw backend user (snake_case) → frontend User (camelCase) ──────
-const mapRawUser = (raw: any): User => ({
+
+// Add this interface to model the backend response structure
+interface RawUser {
+  id: string;
+  email: string;
+  full_name?: string;
+  fullName?: string;
+  phone?: string | null;
+  profile_image?: string | null;
+  role?: string | { name?: string };
+  owned_tenants?: { id: string }[];
+  tenantId?: string;
+  is_active?: boolean;
+  isActive?: boolean;
+  created_at?: string;
+  createdAt?: string;
+}
+
+const mapRawUser = (raw: RawUser): User => ({
   id: raw.id,
   email: raw.email,
   fullName: raw.full_name ?? raw.fullName ?? '',

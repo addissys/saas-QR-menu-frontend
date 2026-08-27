@@ -1,35 +1,65 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import axios from 'axios';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { User, Mail, Lock, Phone, QrCode, ArrowLeft } from 'lucide-react';
 
+// 1. Define the Validation Schema with Zod
+const registerSchema = z.object({
+  fullName: z.string().min(2, 'Full name must be at least 2 characters'),
+  email: z.string().email('Please enter a valid email address'),
+  phone: z
+    .string()
+    .length(10, 'Phone number must be exactly 10 characters')
+    .optional()
+    .or(z.literal('')),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
+});
+
+type RegisterFormValues = z.infer<typeof registerSchema>;
+
 export const RegisterPage: React.FC = () => {
-  const { register } = useAuth();
+  const { register: registerUser } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
-
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // 2. Initialize React Hook Form with Zod Resolver
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+  });
+
+  const onSubmit = async (data: RegisterFormValues) => {
     setIsLoading(true);
     try {
-      // Backend accepts: { full_name, email, password, phone? }
-      // The store maps fullName → full_name internally
-      await register({ fullName, email, password, phone: phone || undefined });
+      await registerUser({
+        fullName: data.fullName,
+        email: data.email,
+        password: data.password,
+        phone: data.phone || undefined,
+      });
       showToast('Account created! Please sign in to continue.', 'success');
       navigate('/login');
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message || 'Registration failed. Please try again.';
+    } catch (err: unknown) {
+      let msg = 'Registration failed. Please try again.';
+      if (axios.isAxiosError(err)) {
+        msg = err.response?.data?.message || msg;
+      }
       showToast(msg, 'error');
     } finally {
       setIsLoading(false);
@@ -76,43 +106,64 @@ export const RegisterPage: React.FC = () => {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Full Name *"
-            placeholder="John Doe"
-            icon={User}
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            required
-          />
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <Input
+              label="Full Name *"
+              placeholder="John Doe"
+              icon={User}
+              {...register('fullName')}
+            />
+            {errors.fullName && (
+              <p className="text-red-500 text-[11px] mt-1 font-medium">
+                {errors.fullName.message}
+              </p>
+            )}
+          </div>
 
-          <Input
-            label="Email Address *"
-            type="email"
-            placeholder="owner@restaurant.com"
-            icon={Mail}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+          <div>
+            <Input
+              label="Email Address *"
+              type="email"
+              placeholder="owner@restaurant.com"
+              icon={Mail}
+              {...register('email')}
+            />
+            {errors.email && (
+              <p className="text-red-500 text-[11px] mt-1 font-medium">
+                {errors.email.message}
+              </p>
+            )}
+          </div>
 
-          <Input
-            label="Phone Number"
-            placeholder="+251911000000"
-            icon={Phone}
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
+          <div>
+            <Input
+              label="Phone Number"
+              placeholder="0911223344"
+              icon={Phone}
+              {...register('phone')}
+            />
+            {errors.phone && (
+              <p className="text-red-500 text-[11px] mt-1 font-medium">
+                {errors.phone.message}
+              </p>
+            )}
+          </div>
 
-          <Input
-            label="Password *"
-            type="password"
-            placeholder="At least 8 characters"
-            icon={Lock}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <div>
+            <Input
+              label="Password *"
+              type="password"
+              placeholder="At least 8 chars, 1 uppercase, 1 symbol"
+              icon={Lock}
+              {...register('password')}
+            />
+            {errors.password && (
+              <p className="text-red-500 text-[11px] mt-1 font-medium">
+                {errors.password.message}
+              </p>
+            )}
+          </div>
 
           <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
             <Button

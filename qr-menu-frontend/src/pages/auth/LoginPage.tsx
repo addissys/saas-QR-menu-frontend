@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import axios from 'axios';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -8,31 +12,43 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Mail, Lock, QrCode, ArrowLeft } from 'lucide-react';
 
+const loginSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
+
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
-
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+  });
+
+  const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
     try {
-      await login(email, password);
+      await login(data.email, data.password);
       showToast('Welcome back! Signed in successfully.', 'success');
-      // Role-based redirect using store state (set during login)
       const user = useAuthStore.getState().user;
       if (user?.role === 'SUPER_ADMIN') {
         navigate('/admin/dashboard');
       } else {
         navigate('/dashboard');
       }
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message || 'Invalid credentials. Please try again.';
+    } catch (err: unknown) {
+      let msg = 'Invalid credentials. Please try again.';
+      if (axios.isAxiosError(err)) {
+        msg = err.response?.data?.message || msg;
+      }
       showToast(msg, 'error');
     } finally {
       setIsLoading(false);
@@ -41,7 +57,6 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 relative overflow-hidden font-sans">
-      {/* Background Animated Glows */}
       <motion.div
         animate={{ scale: [1, 1.2, 1], opacity: [0.15, 0.25, 0.15] }}
         transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
@@ -79,26 +94,32 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Email Address"
-            type="email"
-            icon={Mail}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="owner@restaurant.com"
-            required
-          />
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <Input
+              label="Email Address"
+              type="email"
+              icon={Mail}
+              placeholder="owner@restaurant.com"
+              {...register('email')}
+            />
+            {errors.email && (
+              <p className="text-red-500 text-[11px] mt-1 font-medium">{errors.email.message}</p>
+            )}
+          </div>
 
-          <Input
-            label="Password"
-            type="password"
-            icon={Lock}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Your password"
-            required
-          />
+          <div>
+            <Input
+              label="Password"
+              type="password"
+              icon={Lock}
+              placeholder="Your password"
+              {...register('password')}
+            />
+            {errors.password && (
+              <p className="text-red-500 text-[11px] mt-1 font-medium">{errors.password.message}</p>
+            )}
+          </div>
 
           <div className="flex justify-end">
             <Link to="/forgot-password" className="text-xs font-semibold text-amber-600 hover:underline">
