@@ -1,41 +1,42 @@
-import { mockStore, INITIAL_NOTIFICATIONS } from '../services/mockStore';
+import api from './axios';
 import { Notification } from '../types';
 
 export const notificationApi = {
   getAll: async (): Promise<{ data: Notification[] }> => {
-    return { data: mockStore.notifications };
+    const response = await api.get('/notifications');
+    return response.data;
   },
 
   markAsRead: async (id: string): Promise<{ data: { success: boolean } }> => {
-    mockStore.notifications = mockStore.notifications.map((n) =>
-      n.id === id ? { ...n, isRead: true } : n
-    );
-    return { data: { success: true } };
+    const response = await api.patch(`/notifications/${id}/read`);
+    return response.data;
   },
 
   markAllAsRead: async (): Promise<{ data: { success: boolean } }> => {
-    mockStore.notifications = mockStore.notifications.map((n) => ({ ...n, isRead: true }));
-    return { data: { success: true } };
+    const response = await api.patch('/notifications/read-all');
+    return response.data;
   },
 
   delete: async (id: string): Promise<{ data: { success: boolean } }> => {
-    mockStore.notifications = mockStore.notifications.filter((n) => n.id !== id);
-    return { data: { success: true } };
+    const response = await api.delete(`/notifications/${id}`);
+    return response.data;
   },
 
   deleteAll: async (): Promise<{ data: { success: boolean } }> => {
-    mockStore.notifications = [];
+    // Delete iteratively or via backend clear route if supported
+    const allRes = await api.get('/notifications');
+    const notifs: Notification[] = allRes.data.data || [];
+    await Promise.all(notifs.map((n) => api.delete(`/notifications/${n.id}`)));
     return { data: { success: true } };
   },
 
   deleteSelected: async (ids: string[]): Promise<{ data: { success: boolean } }> => {
-    const idSet = new Set(ids);
-    mockStore.notifications = mockStore.notifications.filter((n) => !idSet.has(n.id));
+    await Promise.all(ids.map((id) => api.delete(`/notifications/${id}`)));
     return { data: { success: true } };
   },
 
   restoreSample: async (): Promise<{ data: Notification[] }> => {
-    mockStore.notifications = [...INITIAL_NOTIFICATIONS];
-    return { data: mockStore.notifications };
+    const response = await api.get('/notifications');
+    return response.data;
   },
 };

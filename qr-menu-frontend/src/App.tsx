@@ -16,6 +16,8 @@ import { RegisterPage } from './pages/auth/RegisterPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { UnauthorizedPage } from './pages/UnauthorizedPage';
+
 
 // Public Menu Pages
 import { PublicBranchesPage } from './pages/public/PublicBranchesPage';
@@ -33,6 +35,12 @@ import { NotificationsPage } from './pages/notifications/NotificationsPage';
 import { AuditLogsPage } from './pages/audit-logs/AuditLogsPage';
 import { UserProfilePage } from './pages/Profile/UserProfilePage';
 import { ChangePasswordPage } from './pages/Profile/ChangePasswordPage';
+
+// User & Role Hierarchy Management Pages
+import { ExecutivesListPage } from './pages/users/ExecutivesListPage';
+import { BranchManagersListPage } from './pages/users/BranchManagersListPage';
+import { StaffListPage } from './pages/users/StaffListPage';
+
 
 // Super Admin Pages
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
@@ -63,6 +71,7 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
+
         {/* 2. Public QR Digital Menu Links */}
         <Route path="/public/branches" element={<PublicBranchesPage />} />
         <Route path="/public/branches/:branchId/menu" element={<PublicMenuPage />} />
@@ -90,7 +99,34 @@ export default function App() {
           <Route path="/audit-logs" element={<AuditLogsPage />} />
           <Route path="/profile" element={<UserProfilePage />} />
           <Route path="/change-password" element={<ChangePasswordPage />} />
+          <Route path="/executives" element={<ExecutivesListPage />} />
         </Route>
+
+                    {/* . Staff Management Routes (Cafe Owner, Executive, Branch Manager) */}
+            <Route
+              element={
+                <ProtectedRoute>
+                  <RoleProtectedRoute allowedRoles={['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER']}>
+                    <DashboardLayout />
+                  </RoleProtectedRoute>
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/staff-members" element={<StaffListPage />} />
+            </Route>
+
+        {/* . Branch Manager Management Routes (Cafe Owner & Executive) */}
+            <Route
+              element={
+                <ProtectedRoute>
+                  <RoleProtectedRoute allowedRoles={['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE']}>
+                    <DashboardLayout />
+                  </RoleProtectedRoute>
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/branch-managers" element={<BranchManagersListPage />} />
+            </Route>
 
         {/* 4. Super Admin Management Routes */}
         <Route

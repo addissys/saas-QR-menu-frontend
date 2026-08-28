@@ -1,12 +1,14 @@
-import { mockStore } from '../services/mockStore';
+import api from './axios';
 import { AuditLog } from '../types';
 
 export const auditLogApi = {
   getAll: async (): Promise<{ data: AuditLog[] }> => {
-    return { data: mockStore.auditLogs };
+    const response = await api.get('/audit-logs');
+    return response.data;
   },
 
   getAllGlobal: async (): Promise<{ data: AuditLog[] }> => {
-    return { data: mockStore.auditLogs };
+    const response = await api.get('/audit-logs');
+    return response.data;
   },
 };

@@ -1,26 +1,29 @@
-import { mockStore } from '../services/mockStore';
+import api from './axios';
 import { Branch, Category, MenuItem, Table } from '../types';
 
 export const publicMenuApi = {
   getPublicBranches: async (): Promise<{ data: Branch[] }> => {
-    return { data: mockStore.branches.filter((b) => b.isActive) };
+    const response = await api.get('/public/branches');
+    return response.data;
   },
 
   getBranchPublic: async (branchId: string): Promise<{ data: Branch }> => {
-    const branch = mockStore.branches.find((b) => b.id === branchId) || mockStore.branches[0];
-    return { data: branch };
+    const response = await api.get(`/public/branches/${branchId}/menu`);
+    return { data: response.data.data?.branch || response.data.data };
   },
 
   getTablePublic: async (tableId: string): Promise<{ data: Table }> => {
-    const table = mockStore.tables.find((t) => t.id === tableId) || mockStore.tables[0];
-    return { data: table };
+    const response = await api.get(`/tables/${tableId}`);
+    return response.data;
   },
 
   getBranchCategories: async (branchId: string): Promise<{ data: Category[] }> => {
-    return { data: mockStore.categories.filter((c) => c.branchId === branchId && c.isActive) };
+    const response = await api.get(`/public/branches/${branchId}/menu`);
+    return { data: response.data.data?.categories || [] };
   },
 
   getBranchMenuItems: async (branchId: string): Promise<{ data: MenuItem[] }> => {
-    return { data: mockStore.menuItems.filter((m) => m.branchId === branchId) };
+    const response = await api.get(`/public/branches/${branchId}/menu`);
+    return { data: response.data.data?.menu_items || response.data.data?.items || [] };
   },
 };

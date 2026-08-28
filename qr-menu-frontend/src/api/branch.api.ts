@@ -1,37 +1,30 @@
-import { mockStore } from '../services/mockStore';
+import api from './axios';
 import { Branch } from '../types';
 
 export const branchApi = {
   getAll: async (): Promise<{ data: Branch[] }> => {
-    return { data: mockStore.branches };
+    const response = await api.get('/branches');
+    return response.data;
   },
 
   getAllGlobal: async (): Promise<{ data: Branch[] }> => {
-    return { data: mockStore.branches };
+    const response = await api.get('/branches');
+    return response.data;
   },
 
   getById: async (id: string): Promise<{ data: Branch }> => {
-    const branch = mockStore.branches.find((b) => b.id === id) || mockStore.branches[0];
-    return { data: branch };
+    const response = await api.get(`/branches/${id}`);
+    return response.data;
   },
 
   create: async (payload: Partial<Branch> & { name: string; address: string; phone: string }): Promise<{ data: Branch }> => {
-    const newBranch: Branch = {
-      id: `branch-${Date.now()}`,
-      tenantId: mockStore.tenant.id,
-      createdAt: new Date().toISOString(),
-      isActive: true,
-      ...payload,
-    };
-    mockStore.branches = [...mockStore.branches, newBranch];
-    return { data: newBranch };
+    const response = await api.post('/branches', payload);
+    return response.data;
   },
 
   update: async (id: string, payload: Partial<Branch>): Promise<{ data: Branch }> => {
-    const branches = mockStore.branches.map((b) => (b.id === id ? { ...b, ...payload } : b));
-    mockStore.branches = branches;
-    const updated = branches.find((b) => b.id === id)!;
-    return { data: updated };
+    const response = await api.patch(`/branches/${id}`, payload);
+    return response.data;
   },
 
   toggleActive: async (id: string, isActive: boolean): Promise<{ data: Branch }> => {
@@ -39,7 +32,7 @@ export const branchApi = {
   },
 
   delete: async (id: string): Promise<{ data: { success: boolean } }> => {
-    mockStore.branches = mockStore.branches.filter((b) => b.id !== id);
-    return { data: { success: true } };
+    const response = await api.delete(`/branches/${id}`);
+    return response.data;
   },
 };
