@@ -29,7 +29,7 @@ import { RestaurantProfilePage } from './pages/restaurants/RestaurantProfilePage
 import { BranchesListPage } from './pages/branches/BranchesListPage';
 import { TablesListPage } from './pages/tables/TablesListPage';
 import { QRCodesPage } from './pages/qr/QRCodesPage';
-import { CategoriesListPage } from './pages/categories/CategoriesListPage';
+import CategoriesListPage from './pages/categories/CategoriesListPage';
 import { MenuItemsListPage } from './pages/menu-items/MenuItemsListPage';
 import { NotificationsPage } from './pages/notifications/NotificationsPage';
 import { AuditLogsPage } from './pages/audit-logs/AuditLogsPage';

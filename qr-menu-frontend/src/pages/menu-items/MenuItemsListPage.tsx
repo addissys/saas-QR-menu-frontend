@@ -45,11 +45,11 @@ export const MenuItemsListPage: React.FC = () => {
   const fetchItemsAndCategories = () => {
     setIsLoading(true);
     Promise.all([menuItemApi.getAll(), categoryApi.getAll()])
-      .then(([mRes, cRes]) => {
+      .then(([mRes, cats]) => {
         setMenuItems(mRes.data);
-        setCategories(cRes.data);
-        if (cRes.data.length > 0 && !categoryId) {
-          setCategoryId(cRes.data[0].id);
+        setCategories(cats);
+        if (cats.length > 0 && !categoryId) {
+          setCategoryId(cats[0].id);
         }
       })
       .finally(() => setIsLoading(false));

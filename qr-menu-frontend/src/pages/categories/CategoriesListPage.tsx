@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { AxiosError } from 'axios';
 import { categoryApi } from '../../api/category.api';
 import { Category } from '../../types';
 import { useToast } from '../../hooks/useToast';
+import { useAuth } from '../../hooks/useAuth'; // Replace with useAuthStore if using Zustand store
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
@@ -9,8 +11,13 @@ import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { Table, Column } from '../../components/ui/Table';
 import { Plus, FolderTree, Edit3, Trash2 } from 'lucide-react';
 
-export const CategoriesListPage: React.FC = () => {
+const CategoriesListPage: React.FC = () => {
   const { showToast } = useToast();
+  const { user } = useAuth(); // Retrieve active logged-in user
+
+  // Extract branch ID from user object (or fallback to localStorage)
+  const activeBranchId = user?.branch_id || user?.branchId || localStorage.getItem('branch_id');
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -18,57 +25,71 @@ export const CategoriesListPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [displayOrder, setDisplayOrder] = useState('0');
 
   // Delete State
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const fetchCategories = () => {
-    setIsLoading(true);
+  const fetchCategories = useCallback(() => {
     categoryApi
-      .getAll()
-      .then((res) => setCategories(res.data))
+      .getAll(activeBranchId || undefined)
+      .then((data) => setCategories(data))
+      .catch(() => showToast('Failed to load categories', 'error'))
       .finally(() => setIsLoading(false));
-  };
+  }, [activeBranchId, showToast]);
 
   useEffect(() => {
     fetchCategories();
-  }, []);
+  }, [fetchCategories]);
 
   const handleOpenCreate = () => {
     setEditingCategory(null);
     setName('');
     setDisplayOrder('0');
+    setDescription('');
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (category: Category) => {
     setEditingCategory(category);
     setName(category.name);
-    setDisplayOrder(category.displayOrder?.toString() || '0');
+    setDisplayOrder(category.sort_order?.toString() || category.displayOrder?.toString() || '0');
+    setDescription(category.description || '');
     setIsModalOpen(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!editingCategory && !activeBranchId) {
+      showToast('No active branch selected or found for user', 'error');
+      return;
+    }
+
     try {
       if (editingCategory) {
         await categoryApi.update(editingCategory.id, {
-          name,
-          displayOrder: parseInt(displayOrder) || 0,
+          name: name.trim(),
+          description: description.trim() || undefined,
+          sort_order: parseInt(displayOrder, 10) || 0,
         });
         showToast('Category updated successfully', 'success');
       } else {
         await categoryApi.create({
-          name,
-          displayOrder: parseInt(displayOrder) || 0,
+          branch_id: activeBranchId!,
+          name: name.trim(),
+          description: description.trim() || undefined,
+          sort_order: parseInt(displayOrder, 10) || 0,
         });
         showToast('Category created successfully', 'success');
       }
       setIsModalOpen(false);
       fetchCategories();
     } catch (err) {
-      showToast('Failed to save category', 'error');
+      const error = err as AxiosError<{ message?: string }>;
+      const message = error.response?.data?.message || 'Failed to save category';
+      showToast(message, 'error');
     }
   };
 
@@ -79,7 +100,7 @@ export const CategoriesListPage: React.FC = () => {
       showToast('Category deleted', 'success');
       setDeletingId(null);
       fetchCategories();
-    } catch (err) {
+    } catch {
       showToast('Failed to delete category', 'error');
     }
   };
@@ -101,7 +122,11 @@ export const CategoriesListPage: React.FC = () => {
     },
     {
       header: 'Sort Priority',
-      accessor: (c) => <span className="font-mono text-xs font-bold text-slate-700">{c.displayOrder || 0}</span>,
+      accessor: (c) => (
+        <span className="font-mono text-xs font-bold text-slate-700">
+          {c.sort_order ?? c.displayOrder ?? 0}
+        </span>
+      ),
     },
     {
       header: 'Actions',
@@ -159,6 +184,12 @@ export const CategoriesListPage: React.FC = () => {
             required
           />
           <Input
+            label="Description"
+            placeholder="e.g. Fresh seasonal desserts"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <Input
             label="Display Sort Priority"
             type="number"
             placeholder="0"
@@ -187,3 +218,5 @@ export const CategoriesListPage: React.FC = () => {
     </div>
   );
 };
+
+export default CategoriesListPage;
