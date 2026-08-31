@@ -36,6 +36,7 @@ export const BranchManagersListPage: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [assignedBranchId, setAssignedBranchId] = useState('');
 
   const normalizedRole = normalizeRole(user?.role);
@@ -46,16 +47,16 @@ export const BranchManagersListPage: React.FC = () => {
     normalizedRole === 'SUPER_ADMIN';
   const isExecutive = normalizedRole === 'EXECUTIVE';
 
-  // Determine allowed branches for the current user
+  // Cafe Owners and Super Admins can see ALL branches.
+  // Executives only see the branches they are assigned to.
   const allowedBranches = branches.filter((b) => {
     if (isCafeOwner) return true;
-    if (isExecutive) {
-      return user?.assignedBranchIds?.includes(b.id);
-    }
+    if (isExecutive) return user?.assignedBranchIds?.includes(b.id);
     return false;
   });
 
-  const canCreate = (isCafeOwner || isExecutive) && allowedBranches.length > 0;
+  // Cafe Owners can always create. Executives need at least one assigned branch.
+  const canCreate = isCafeOwner || (isExecutive && allowedBranches.length > 0);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -84,6 +85,7 @@ export const BranchManagersListPage: React.FC = () => {
     setFullName('');
     setEmail('');
     setPhone('');
+    setPassword('');
     // Preselect currently selected branch filter if available
     const initialBranchId =
       branchFilter !== 'all' && allowedBranches.some((b) => b.id === branchFilter)
@@ -113,6 +115,10 @@ export const BranchManagersListPage: React.FC = () => {
       showToast('Please fill all required fields and select a branch', 'error');
       return;
     }
+    if (!password || password.length < 8) {
+      showToast('Password must be at least 8 characters', 'error');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -120,6 +126,7 @@ export const BranchManagersListPage: React.FC = () => {
         fullName,
         email,
         phone,
+        password,
         role: 'BRANCH_MANAGER',
         assignedBranchIds: [assignedBranchId],
       });
@@ -127,7 +134,8 @@ export const BranchManagersListPage: React.FC = () => {
       setIsCreateOpen(false);
       await loadData();
     } catch (err: any) {
-      showToast(err?.message || 'Failed to create branch manager', 'error');
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to create branch manager';
+      showToast(msg, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -149,7 +157,8 @@ export const BranchManagersListPage: React.FC = () => {
       setIsEditOpen(false);
       await loadData();
     } catch (err: any) {
-      showToast(err?.message || 'Failed to update branch manager', 'error');
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to update branch manager';
+      showToast(msg, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -164,7 +173,8 @@ export const BranchManagersListPage: React.FC = () => {
       setIsDeleteOpen(false);
       await loadData();
     } catch (err: any) {
-      showToast(err?.message || 'Failed to deactivate branch manager', 'error');
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to deactivate branch manager';
+      showToast(msg, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -232,28 +242,47 @@ export const BranchManagersListPage: React.FC = () => {
       )}
 
       {/* Grid List */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-44 bg-slate-100 animate-pulse rounded-3xl" />
-          ))}
-        </div>
-      ) : managers.length === 0 ? (
-        <EmptyState
-          icon={UserCheck}
-          title={branchFilter !== 'all' ? 'No Branch Managers Yet' : 'No Branch Managers Found'}
-          description={
-            branchFilter !== 'all'
-              ? 'There are no branch managers assigned to this branch yet.'
-              : 'There are no branch managers found in your authorized jurisdiction yet.'
-          }
-          actionText={canCreate ? '+ Add Branch Manager' : undefined}
-          onAction={openCreateModal}
-        />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {managers.map((mgr) => {
-            const assignedBranch = branches.find((b) => mgr.assignedBranchIds?.includes(b.id));
+      {(() => {
+        const filteredManagers = managers.filter((mgr) => {
+          if (branchFilter === 'all') return true;
+          return (
+            mgr.branchId === branchFilter ||
+            mgr.assignedBranchIds?.includes(branchFilter)
+          );
+        });
+
+        if (isLoading) {
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-44 bg-slate-100 animate-pulse rounded-3xl" />
+              ))}
+            </div>
+          );
+        }
+
+        if (filteredManagers.length === 0) {
+          return (
+            <EmptyState
+              icon={UserCheck}
+              title={branchFilter !== 'all' ? 'No Branch Managers Yet' : 'No Branch Managers Found'}
+              description={
+                branchFilter !== 'all'
+                  ? 'There are no branch managers assigned to this branch location yet.'
+                  : 'There are no branch managers found in your authorized jurisdiction yet.'
+              }
+              actionText={canCreate ? '+ Add Branch Manager' : undefined}
+              onAction={openCreateModal}
+            />
+          );
+        }
+
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredManagers.map((mgr) => {
+              const assignedBranch = branches.find(
+                (b) => mgr.assignedBranchIds?.includes(b.id) || b.id === mgr.branchId
+              );
 
             return (
               <motion.div
@@ -337,7 +366,8 @@ export const BranchManagersListPage: React.FC = () => {
             );
           })}
         </div>
-      )}
+      );
+    })()}
 
       {/* Create Branch Manager Modal */}
       <Modal
@@ -369,6 +399,15 @@ export const BranchManagersListPage: React.FC = () => {
             placeholder="+251 91 345 6789"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
+          />
+
+          <Input
+            label="Password *"
+            type="password"
+            placeholder="Min. 8 characters"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
           />
 
           <Select

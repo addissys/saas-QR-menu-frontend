@@ -23,6 +23,7 @@ export const BranchesListPage: React.FC = () => {
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
   const [phone, setPhone] = useState('');
   const [openingHours, setOpeningHours] = useState('');
 
@@ -45,6 +46,7 @@ export const BranchesListPage: React.FC = () => {
     setEditingBranch(null);
     setName('');
     setAddress('');
+    setCity('');
     setPhone('');
     setOpeningHours('08:00 AM - 10:00 PM');
     setIsModalOpen(true);
@@ -54,6 +56,7 @@ export const BranchesListPage: React.FC = () => {
     setEditingBranch(branch);
     setName(branch.name);
     setAddress(branch.address);
+    setCity(branch.city || '');
     setPhone(branch.phone);
     setOpeningHours(branch.openingHours || '');
     setIsModalOpen(true);
@@ -61,18 +64,37 @@ export const BranchesListPage: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!city.trim()) {
+      showToast('City is required', 'error');
+      return;
+    }
     try {
       if (editingBranch) {
-        await branchApi.update(editingBranch.id, { name, address, phone, openingHours });
+        await branchApi.update(editingBranch.id, { name, address, city, phone, openingHours });
         showToast('Branch updated successfully', 'success');
       } else {
-        await branchApi.create({ name, address, phone, openingHours });
+        await branchApi.create({
+          tenantId: user?.tenantId || '',
+          name,
+          address,
+          city,
+          phone,
+          openingHours
+        });
         showToast('New branch created successfully', 'success');
       }
       setIsModalOpen(false);
       fetchBranches();
-    } catch (err) {
-      showToast('Failed to save branch', 'error');
+    } catch (err: any) {
+      let msg = err?.response?.data?.message ?? err?.message ?? 'Failed to save branch';
+      const errorsObj = err?.response?.data?.errors;
+      if (errorsObj?.fieldErrors) {
+        const details = Object.entries(errorsObj.fieldErrors)
+          .map(([field, msgs]: [string, any]) => `${field}: ${(msgs as string[]).join(', ')}`)
+          .join('; ');
+        if (details) msg = `Validation failed — ${details}`;
+      }
+      showToast(msg, 'error');
     }
   };
 
@@ -108,7 +130,7 @@ export const BranchesListPage: React.FC = () => {
       accessor: (b) => (
         <span className="flex items-center gap-1.5 text-slate-600 font-medium">
           <MapPin className="h-3.5 w-3.5 text-amber-500" />
-          {b.address}
+          {b.address}{b.city ? `, ${b.city}` : ''}
         </span>
       ),
     },
@@ -256,6 +278,13 @@ export const BranchesListPage: React.FC = () => {
             placeholder="123 Main Street, Suite 100"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
+            required
+          />
+          <Input
+            label="City *"
+            placeholder="e.g. Addis Ababa"
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
             required
           />
           <Input

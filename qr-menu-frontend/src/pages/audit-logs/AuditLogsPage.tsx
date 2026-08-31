@@ -26,7 +26,7 @@ export const AuditLogsPage: React.FC = () => {
   const filteredLogs = logs.filter(
     (log) =>
       log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.entityName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (log.entityName ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (log.userEmail && log.userEmail.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 

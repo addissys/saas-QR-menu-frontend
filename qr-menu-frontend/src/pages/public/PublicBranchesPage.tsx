@@ -16,15 +16,20 @@ export const PublicBranchesPage: React.FC = () => {
   useEffect(() => {
     publicMenuApi
       .getPublicBranches()
-      .then((res) => setBranches(res.data))
+      .then((res) => {
+        const list = Array.isArray(res.data) ? res.data : [];
+        setBranches(list);
+      })
       .catch(console.error)
       .finally(() => setIsLoading(false));
   }, []);
 
-  const filteredBranches = branches.filter(
+  const safeBranches = Array.isArray(branches) ? branches : [];
+  const filteredBranches = safeBranches.filter(
     (b) =>
-      b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.address.toLowerCase().includes(searchQuery.toLowerCase())
+      b.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      b.address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      b.city?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -77,49 +82,57 @@ export const PublicBranchesPage: React.FC = () => {
             transition={{ duration: 0.4 }}
             className="grid grid-cols-1 md:grid-cols-2 gap-6"
           >
-            {filteredBranches.map((branch, idx) => (
-              <motion.div
-                key={branch.id}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: idx * 0.08 }}
-                whileHover={{ y: -6 }}
-                className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-md hover:shadow-xl transition-all flex flex-col justify-between space-y-4 group"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 group-hover:text-amber-600 transition-colors">
-                      <Store className="h-5 w-5 text-amber-500" />
-                      {branch.name}
-                    </h3>
-                    <Badge variant="success" size="sm">Open Now</Badge>
-                  </div>
-
-                  <div className="space-y-1.5 text-xs text-slate-600">
-                    <p className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
-                      {branch.address}
-                    </p>
-                    <p className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-slate-400 shrink-0" />
-                      {branch.phone}
-                    </p>
-                    <p className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-slate-400 shrink-0" />
-                      {branch.openingHours || '08:00 AM - 10:00 PM'}
-                    </p>
-                  </div>
-                </div>
-
-                <Link
-                  to={`/public/branches/${branch.id}/menu`}
-                  className="inline-flex items-center justify-center gap-2 w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-2xl transition-colors shadow-md shadow-amber-500/20"
+            {filteredBranches.length === 0 ? (
+              <div className="col-span-full bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-500 space-y-2">
+                <Store className="h-8 w-8 text-slate-400 mx-auto" />
+                <p className="font-bold text-sm text-slate-700">No Branch Locations Found</p>
+                <p className="text-xs text-slate-400">Try adjusting your search criteria or check back later.</p>
+              </div>
+            ) : (
+              filteredBranches.map((branch, idx) => (
+                <motion.div
+                  key={branch.id}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: idx * 0.08 }}
+                  whileHover={{ y: -6 }}
+                  className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-md hover:shadow-xl transition-all flex flex-col justify-between space-y-4 group"
                 >
-                  <span>Explore Digital Menu</span>
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </motion.div>
-            ))}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 group-hover:text-amber-600 transition-colors">
+                        <Store className="h-5 w-5 text-amber-500" />
+                        {branch.name}
+                      </h3>
+                      <Badge variant="success" size="sm">Open Now</Badge>
+                    </div>
+
+                    <div className="space-y-1.5 text-xs text-slate-600">
+                      <p className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+                        {branch.address}{branch.city ? `, ${branch.city}` : ''}
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-slate-400 shrink-0" />
+                        {branch.phone}
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-slate-400 shrink-0" />
+                        {branch.openingHours || '08:00 AM - 10:00 PM'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <Link
+                    to={`/public/branches/${branch.id}/menu`}
+                    className="inline-flex items-center justify-center gap-2 w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-2xl transition-colors shadow-md shadow-amber-500/20"
+                  >
+                    <span>Explore Digital Menu</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </motion.div>
+              ))
+            )}
           </motion.div>
         )}
       </main>

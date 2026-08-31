@@ -23,54 +23,29 @@ export const AdminRestaurantsPage: React.FC = () => {
   // Get tenants from backend
   // ================================
   const fetchTenants = async () => {
-    setIsLoading(true);
+  setIsLoading(true);
 
-    try {
-      const res = await adminApi.getTenants();
+  try {
+    const tenants = await adminApi.getTenants();
 
-      console.log('Admin tenants response:', res.data);
+    console.log('Admin tenants response:', tenants);
 
-      /*
-       * Backend response is:
-       *
-       * {
-       *   success: true,
-       *   message: "...",
-       *   data: result
-       * }
-       *
-       * result may contain:
-       * {
-       *   tenants: [],
-       *   total: ...,
-       *   page: ...,
-       *   limit: ...
-       * }
-       */
-
-      const data = res.data?.data;
-
-      if (Array.isArray(data)) {
-        // If backend directly returns an array
-        setTenants(data);
-      } else if (Array.isArray(data?.tenants)) {
-        // If backend returns { tenants: [] }
-        setTenants(data.tenants);
-      } else {
-        // Safety fallback
-        setTenants([]);
-        console.warn('Unexpected tenants response:', res.data);
-      }
-    } catch (error) {
-      console.error('Failed to load tenants:', error);
-
-      showToast('Failed to load tenants', 'error');
-
+    if (Array.isArray(tenants)) {
+      setTenants(tenants);
+    } else {
       setTenants([]);
-    } finally {
-      setIsLoading(false);
+      console.warn('Unexpected tenants response:', tenants);
     }
-  };
+  } catch (error) {
+    console.error('Failed to load tenants:', error);
+
+    showToast('Failed to load tenants', 'error');
+
+    setTenants([]);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // ================================
   // Load tenants when page opens

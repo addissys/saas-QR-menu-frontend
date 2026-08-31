@@ -20,9 +20,9 @@ export const RecentActivity: React.FC<{ logs: AuditLogItem[] }> = ({ logs }) => 
             <div>
               <p className="font-medium text-slate-900">
                 <span className="font-semibold text-purple-700">{log.userName || 'System'}</span>{' '}
-                {log.action.toLowerCase()}d a {log.entity}
+                {log.action.toLowerCase()}d a {log.entity ?? log.entityName ?? 'record'}
               </p>
-              <p className="text-xs text-slate-500">{log.module} module</p>
+              <p className="text-xs text-slate-500">{log.module ?? 'Activity'} module</p>
             </div>
           </div>
           <div className="flex items-center text-xs text-slate-400 gap-1">

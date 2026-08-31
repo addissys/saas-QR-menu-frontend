@@ -20,7 +20,7 @@ export const AdminDashboardPage: React.FC = () => {
     isError,
   } = useQuery({
     queryKey: ['admin-statistics'],
-    queryFn: adminApi.getStatistics,
+    queryFn: adminApi.getDashboard,
   });
 
   if (isError) {

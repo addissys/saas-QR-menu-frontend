@@ -36,6 +36,7 @@ export const StaffListPage: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [assignedBranchId, setAssignedBranchId] = useState('');
 
   const normalizedRole = normalizeRole(user?.role);
@@ -68,7 +69,7 @@ export const StaffListPage: React.FC = () => {
       setStaffList(staffRes.data);
       setBranches(branchRes.data);
     } catch (err: any) {
-      const msg = err?.message || 'Failed to load staff members';
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to load staff members';
       setErrorMessage(msg);
       showToast(msg, 'error');
     } finally {
@@ -84,6 +85,7 @@ export const StaffListPage: React.FC = () => {
     setFullName('');
     setEmail('');
     setPhone('');
+    setPassword('');
     const initialBranchId =
       branchFilter !== 'all' && allowedBranches.some((b) => b.id === branchFilter)
         ? branchFilter
@@ -112,6 +114,10 @@ export const StaffListPage: React.FC = () => {
       showToast('Please fill all required fields and select a branch', 'error');
       return;
     }
+    if (!password || password.length < 8) {
+      showToast('Password must be at least 8 characters', 'error');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -119,6 +125,7 @@ export const StaffListPage: React.FC = () => {
         fullName,
         email,
         phone,
+        password,
         role: 'STAFF',
         assignedBranchIds: [assignedBranchId],
       });
@@ -126,7 +133,8 @@ export const StaffListPage: React.FC = () => {
       setIsCreateOpen(false);
       await loadData();
     } catch (err: any) {
-      showToast(err?.message || 'Failed to create staff member', 'error');
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to create staff member';
+      showToast(msg, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -148,7 +156,8 @@ export const StaffListPage: React.FC = () => {
       setIsEditOpen(false);
       await loadData();
     } catch (err: any) {
-      showToast(err?.message || 'Failed to update staff member', 'error');
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to update staff member';
+      showToast(msg, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -163,7 +172,8 @@ export const StaffListPage: React.FC = () => {
       setIsDeleteOpen(false);
       await loadData();
     } catch (err: any) {
-      showToast(err?.message || 'Failed to deactivate staff member', 'error');
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to deactivate staff member';
+      showToast(msg, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -235,28 +245,47 @@ export const StaffListPage: React.FC = () => {
       )}
 
       {/* Grid List */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-44 bg-slate-100 animate-pulse rounded-3xl" />
-          ))}
-        </div>
-      ) : staffList.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title={branchFilter !== 'all' ? 'No Staff Members Yet' : 'No Staff Members Found'}
-          description={
-            branchFilter !== 'all'
-              ? 'No staff members have been added to this branch yet.'
-              : 'No staff members have been added to your authorized branches yet.'
-          }
-          actionText={canManageStaff ? '+ Add Staff Member' : undefined}
-          onAction={openCreateModal}
-        />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {staffList.map((staff) => {
-            const assignedBranch = branches.find((b) => staff.assignedBranchIds?.includes(b.id));
+      {(() => {
+        const filteredStaff = staffList.filter((staff) => {
+          if (branchFilter === 'all') return true;
+          return (
+            staff.branchId === branchFilter ||
+            staff.assignedBranchIds?.includes(branchFilter)
+          );
+        });
+
+        if (isLoading) {
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-44 bg-slate-100 animate-pulse rounded-3xl" />
+              ))}
+            </div>
+          );
+        }
+
+        if (filteredStaff.length === 0) {
+          return (
+            <EmptyState
+              icon={Users}
+              title={branchFilter !== 'all' ? 'No Staff Members Yet' : 'No Staff Members Found'}
+              description={
+                branchFilter !== 'all'
+                  ? 'No staff members have been added to this branch location yet.'
+                  : 'No staff members have been added to your authorized branches yet.'
+              }
+              actionText={canManageStaff ? '+ Add Staff Member' : undefined}
+              onAction={openCreateModal}
+            />
+          );
+        }
+
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredStaff.map((staff) => {
+              const assignedBranch = branches.find(
+                (b) => staff.assignedBranchIds?.includes(b.id) || b.id === staff.branchId
+              );
 
             return (
               <motion.div
@@ -342,7 +371,8 @@ export const StaffListPage: React.FC = () => {
             );
           })}
         </div>
-      )}
+      );
+    })()}
 
       {/* Create Staff Modal */}
       <Modal
@@ -374,6 +404,15 @@ export const StaffListPage: React.FC = () => {
             placeholder="+251 91 456 7890"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
+          />
+
+          <Input
+            label="Password *"
+            type="password"
+            placeholder="Min. 8 characters"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
           />
 
           <Select

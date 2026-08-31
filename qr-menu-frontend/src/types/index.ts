@@ -11,6 +11,8 @@ export type UserRole =
 export interface User {
   id: string;
   tenantId: string;
+  branchId?: string;
+  branch_id?: string;
   email: string;
   fullName: string;
   phone?: string;
@@ -24,10 +26,18 @@ export interface User {
 export interface Tenant {
   id: string;
   businessName: string;
+  businessSlug?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  country?: string;
   logoUrl?: string;
+  brandColor?: string;
   primaryColor?: string;
   currencySymbol?: string;
   description?: string;
+  status?: string;
   isActive: boolean;
   ownerId?: string;
   ownerName?: string;
@@ -37,8 +47,10 @@ export interface Tenant {
 export interface Branch {
   id: string;
   tenantId: string;
+  tenantName?: string;
   name: string;
   address: string;
+  city?: string;
   phone: string;
   openingHours?: string;
   isActive?: boolean;
@@ -63,6 +75,7 @@ export interface Category {
   name: string;
   description?: string;
   displayOrder: number;
+  sort_order?: number;
   isActive?: boolean;
   createdAt: string;
 }
@@ -88,6 +101,10 @@ export interface QRCodeConfig {
   tableId?: string;
   branchId: string;
   targetUrl: string;
+  publicUrl: string;
+  branchName?: string;
+  tableNumber?: string;
+  status?: string;
   fgColor: string;
   bgColor: string;
   size: number;
@@ -111,6 +128,8 @@ export interface AuditLog {
   userEmail?: string;
   userName?: string;
   action: string;
+  entity?: string;
+  module?: string;
   entityName?: string;
   details?: string;
   ipAddress?: string;

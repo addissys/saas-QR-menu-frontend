@@ -87,13 +87,20 @@ export const MenuItemsListPage: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const selectedCategory = categoryId || categories[0]?.id;
+    if (!selectedCategory) {
+      showToast('Please create a category first before adding menu items', 'error');
+      return;
+    }
+
     try {
       const payload = {
-        name,
-        description,
+        name: name.trim(),
+        description: description.trim(),
         price: parseFloat(price) || 0,
-        categoryId,
-        imageUrl,
+        categoryId: selectedCategory,
+        imageUrl: imageUrl.trim() || undefined,
         preparationTimeMinutes: parseInt(prepTime) || 15,
         isAvailable,
         isFeatured,
@@ -108,8 +115,9 @@ export const MenuItemsListPage: React.FC = () => {
       }
       setIsModalOpen(false);
       fetchItemsAndCategories();
-    } catch (err) {
-      showToast('Failed to save menu item', 'error');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to save menu item';
+      showToast(msg, 'error');
     }
   };
 

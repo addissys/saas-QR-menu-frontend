@@ -77,6 +77,8 @@ export default function App() {
         <Route path="/public/branches/:branchId/menu" element={<PublicMenuPage />} />
         <Route path="/public/branches/:branchId/categories" element={<PublicMenuPage />} />
         <Route path="/public/branches/:branchId/tables/:tableId/menu" element={<PublicMenuPage />} />
+        <Route path="/public/tables/:tableId/menu" element={<PublicMenuPage />} />
+        <Route path="/menu/table/:tableId" element={<PublicMenuPage />} />
         <Route path="/public/branches/:branchId/menu-items/:menuItemId" element={<PublicMenuPage />} />
         <Route path="/public/search" element={<PublicBranchesPage />} />
 

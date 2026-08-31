@@ -39,11 +39,13 @@ export const NotificationsPage: React.FC = () => {
     setIsLoading(true);
     try {
       const res = await notificationApi.getAll();
-      setNotifications(res.data);
+      const notifList = Array.isArray(res.data) ? res.data : [];
+      setNotifications(notifList);
       // Prune selected IDs that no longer exist
-      setSelectedIds((prev) => prev.filter((id) => res.data.some((n) => n.id === id)));
+      setSelectedIds((prev) => prev.filter((id) => notifList.some((n) => n.id === id)));
     } catch (err) {
       showToast('Failed to load notifications', 'error');
+      setNotifications([]);
     } finally {
       setIsLoading(false);
     }

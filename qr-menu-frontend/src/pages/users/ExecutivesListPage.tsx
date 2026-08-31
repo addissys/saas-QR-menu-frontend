@@ -34,6 +34,7 @@ export const ExecutivesListPage: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [assignedBranchIds, setAssignedBranchIds] = useState<string[]>([]);
 
   const normalizedRole = normalizeRole(user?.role);
@@ -70,6 +71,7 @@ export const ExecutivesListPage: React.FC = () => {
     setFullName('');
     setEmail('');
     setPhone('');
+    setPassword('');
     setAssignedBranchIds(branches.map((b) => b.id)); // Default select all branches
     setIsCreateOpen(true);
   };
@@ -100,6 +102,10 @@ export const ExecutivesListPage: React.FC = () => {
       showToast('Name and email are required', 'error');
       return;
     }
+    if (!password || password.length < 8) {
+      showToast('Password must be at least 8 characters', 'error');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -107,6 +113,7 @@ export const ExecutivesListPage: React.FC = () => {
         fullName,
         email,
         phone,
+        password,
         role: 'EXECUTIVE',
         assignedBranchIds,
       });
@@ -114,7 +121,8 @@ export const ExecutivesListPage: React.FC = () => {
       setIsCreateOpen(false);
       await loadData();
     } catch (err: any) {
-      showToast(err?.message || 'Failed to create executive', 'error');
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to create executive';
+      showToast(msg, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -136,7 +144,8 @@ export const ExecutivesListPage: React.FC = () => {
       setIsEditOpen(false);
       await loadData();
     } catch (err: any) {
-      showToast(err?.message || 'Failed to update executive', 'error');
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to update executive';
+      showToast(msg, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -151,7 +160,8 @@ export const ExecutivesListPage: React.FC = () => {
       setIsDeleteOpen(false);
       await loadData();
     } catch (err: any) {
-      showToast(err?.message || 'Failed to deactivate executive', 'error');
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to deactivate executive';
+      showToast(msg, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -343,6 +353,15 @@ export const ExecutivesListPage: React.FC = () => {
             placeholder="+251 91 234 5678"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
+          />
+
+          <Input
+            label="Password *"
+            type="password"
+            placeholder="Min. 8 characters"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
           />
 
           <div className="space-y-2">

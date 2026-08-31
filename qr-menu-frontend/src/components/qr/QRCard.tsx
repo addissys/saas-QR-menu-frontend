@@ -88,7 +88,8 @@ export const QRCard: React.FC<QRCardProps> = ({ qr, onToggleStatus, onRegenerate
           size="sm"
           fullWidth
           icon={RefreshCw}
-          onClick={() => onRegenerate(qr.tableId)}
+          disabled={!qr.tableId}
+          onClick={() => qr.tableId && onRegenerate(qr.tableId)}
         >
           Regenerate QR
         </Button>

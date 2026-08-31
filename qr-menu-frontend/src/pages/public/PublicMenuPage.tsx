@@ -8,7 +8,7 @@ import { MenuItemDetailsModal } from '../../components/menu/MenuItemDetailsModal
 import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { MapPin, Search, UtensilsCrossed, ArrowLeft, Star, Clock } from 'lucide-react';
+import { MapPin, Search, UtensilsCrossed, ArrowLeft, Star, Clock, Store, Phone } from 'lucide-react';
 
 export const PublicMenuPage: React.FC = () => {
   const { branchId, tableId } = useParams<{ branchId?: string; tableId?: string }>();
@@ -24,23 +24,35 @@ export const PublicMenuPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    if (!branchId) return;
+    if (!branchId && !tableId) return;
 
     setIsLoading(true);
-    Promise.all([
-      publicMenuApi.getBranchPublic(branchId),
-      publicMenuApi.getBranchCategories(branchId),
-      publicMenuApi.getBranchMenuItems(branchId),
-      tableId ? publicMenuApi.getTablePublic(tableId) : Promise.resolve({ data: null }),
-    ])
-      .then(([bRes, cRes, mRes, tRes]) => {
-        setBranch(bRes.data);
-        setCategories(cRes.data);
-        setMenuItems(mRes.data);
-        if (tRes.data) setTable(tRes.data);
-      })
-      .catch(console.error)
-      .finally(() => setIsLoading(false));
+
+    if (tableId) {
+      publicMenuApi
+        .getTableMenuPublic(tableId, branchId)
+        .then((res) => {
+          setBranch(res.data.branch);
+          setTable(res.data.table);
+          setCategories(res.data.categories);
+          setMenuItems(res.data.menuItems);
+        })
+        .catch(console.error)
+        .finally(() => setIsLoading(false));
+    } else if (branchId) {
+      Promise.all([
+        publicMenuApi.getBranchPublic(branchId),
+        publicMenuApi.getBranchCategories(branchId),
+        publicMenuApi.getBranchMenuItems(branchId),
+      ])
+        .then(([bRes, cRes, mRes]) => {
+          setBranch(bRes.data);
+          setCategories(cRes.data);
+          setMenuItems(mRes.data);
+        })
+        .catch(console.error)
+        .finally(() => setIsLoading(false));
+    }
   }, [branchId, tableId]);
 
   const filteredItems = menuItems.filter((item) => {
@@ -62,30 +74,63 @@ export const PublicMenuPage: React.FC = () => {
       >
         <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 blur-[120px] pointer-events-none" />
         <div className="max-w-5xl mx-auto space-y-4 relative z-10">
-          <Link
-            to="/public/branches"
-            className="inline-flex items-center gap-1.5 text-xs font-extrabold text-amber-400 hover:text-amber-300 transition-colors"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> All Locations
-          </Link>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl sm:text-4xl font-black text-white">{branch?.name || 'Artisan Bistro'}</h1>
-                {table && (
-                  <Badge variant="purple" size="md" className="bg-amber-500 text-slate-950 font-bold border-amber-400">
-                    Table #{table.tableNumber}
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-slate-300 flex items-center gap-1.5 pt-1">
-                <MapPin className="h-3.5 w-3.5 text-amber-400" />
-                {branch?.address}
-              </p>
-            </div>
+          <div className="flex items-center justify-between">
+            <Link
+              to="/public/branches"
+              className="inline-flex items-center gap-1.5 text-xs font-extrabold text-amber-400 hover:text-amber-300 transition-colors bg-white/5 px-3 py-1.5 rounded-full border border-white/10"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> All Locations
+            </Link>
 
             <Badge variant="success" size="md">Digital Menu Live</Badge>
+          </div>
+
+          {/* Restaurant & Branch Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2">
+            <div className="space-y-2">
+              {/* Restaurant Name */}
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-black text-lg">
+                  <Store className="h-5 w-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400/90 block">
+                    Restaurant
+                  </span>
+                  <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
+                    {branch?.tenantName || branch?.name || 'Digital Menu'}
+                  </h1>
+                </div>
+              </div>
+
+              {/* Branch & Table Badges */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs font-bold text-amber-300">
+                  <MapPin className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Branch: {branch?.name || 'Main Location'}</span>
+                </span>
+
+                {table && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-500/20 border border-purple-400/40 rounded-xl text-xs font-black text-purple-200">
+                    Table #{table.tableNumber}
+                  </span>
+                )}
+
+                {branch?.phone && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-white/5 border border-white/10 rounded-xl text-xs text-slate-300">
+                    <Phone className="h-3 w-3 text-slate-400" />
+                    {branch.phone}
+                  </span>
+                )}
+              </div>
+
+              {/* Address */}
+              {branch?.address && (
+                <p className="text-xs text-slate-400 flex items-center gap-1.5 pt-0.5">
+                  <span>{branch.address}{branch.city ? `, ${branch.city}` : ''}</span>
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </motion.div>

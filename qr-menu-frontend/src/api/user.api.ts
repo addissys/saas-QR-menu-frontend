@@ -1,22 +1,108 @@
-import { mockStore } from '../services/mockStore';
+import api from './axios';
 import { User, UserRole } from '../types';
 import { normalizeRole } from '../utils/roles';
+import { branchApi } from './branch.api';
+import { useAuthStore } from '../store/useAuthStore';
 
-// Helper to retrieve currently authenticated user from localStorage session
-const getSessionUser = (): User | null => {
-  try {
-    const saved = localStorage.getItem('qr_user');
-    return saved ? JSON.parse(saved) : null;
-  } catch {
-    return null;
-  }
+// ─── Backend → Frontend mapper ─────────────────────────────────────────────────
+/**
+ * Maps a raw user object from the backend (snake_case) to the frontend User type.
+ * Handles both /users response shape and /executives|/branch-managers response shape.
+ */
+const mapUser = (raw: any): User => {
+  const userData = raw.user ?? raw;
+  const branchId: string | undefined =
+    raw.branch?.id ??
+    raw.branch_id ??
+    raw.staff_profile?.[0]?.branch_id ??
+    raw.staff_profile?.[0]?.branch?.id ??
+    userData.staff_profile?.[0]?.branch_id ??
+    userData.staff_profile?.[0]?.branch?.id ??
+    undefined;
+
+  // Extract assigned branch IDs from raw.executive_branches (multi-branch executives)
+  const executiveBranchIds: string[] = Array.isArray(raw.executive_branches)
+    ? raw.executive_branches
+        .map((eb: any) => eb.branch?.id ?? eb.branch_id ?? eb.id)
+        .filter(Boolean)
+    : [];
+
+  const assignedBranchIds: string[] =
+    executiveBranchIds.length > 0
+      ? executiveBranchIds
+      : branchId
+      ? [branchId]
+      : raw.assignedBranchIds ?? raw.assigned_branch_ids ?? [];
+
+  return {
+    id: userData.id ?? raw.id,
+    email: userData.email ?? raw.email ?? '',
+    fullName: userData.full_name ?? userData.fullName ?? raw.full_name ?? raw.fullName ?? '',
+    phone: userData.phone ?? raw.phone ?? undefined,
+    profileImage: userData.profile_image ?? userData.profileImage ?? undefined,
+    role: (
+      typeof raw.role === 'object' ? raw.role?.name
+        : typeof userData.role === 'object' ? userData.role?.name
+          : raw.role ?? userData.role
+    ) as UserRole,
+    tenantId:
+      raw.branch?.tenant_id ??
+      raw.staff_profile?.[0]?.branch?.tenant_id ??
+      userData.staff_profile?.[0]?.branch?.tenant_id ??
+      userData.tenant_id ??
+      userData.tenantId ??
+      raw.tenant_id ??
+      raw.tenantId ??
+      '',
+    branchId: branchId ?? assignedBranchIds[0],
+    assignedBranchIds,
+    isActive: raw.is_active ?? userData.is_active ?? raw.isActive ?? userData.isActive ?? true,
+    createdAt: raw.created_at ?? raw.createdAt ?? userData.created_at ?? new Date().toISOString(),
+    _staffId: raw.id !== userData.id ? raw.id : undefined,
+  } as any;
 };
+
+// ─── Role ID cache (avoid fetching roles on every call) ───────────────────────
+let cachedRoleMap: Record<string, string> | null = null;
+
+const getRoleMap = async (): Promise<Record<string, string>> => {
+  if (cachedRoleMap) return cachedRoleMap;
+
+  const res = await api.get('/roles');
+  const roles: Array<{ id: string; name: string }> =
+    res.data?.data ?? res.data ?? [];
+
+  cachedRoleMap = {};
+  for (const r of roles) {
+    const norm = normalizeRole(r.name);
+    if (norm !== 'UNKNOWN') {
+      cachedRoleMap[norm] = r.id;
+    }
+    cachedRoleMap[r.name.toUpperCase()] = r.id;
+  }
+
+  return cachedRoleMap;
+};
+
+const resolveRoleId = async (roleName: string): Promise<string> => {
+  const map = await getRoleMap();
+  const norm = normalizeRole(roleName);
+  const id = map[norm] ?? map[roleName.toUpperCase()];
+  if (!id) {
+    throw new Error(
+      `Role "${roleName}" not found. Make sure the backend has this role seeded.`
+    );
+  }
+  return id;
+};
+
+// ─── Public API surface ────────────────────────────────────────────────────────
 
 export interface CreateUserInput {
   fullName: string;
   email: string;
   phone?: string;
-  password?: string;
+  password: string;
   role: UserRole;
   assignedBranchIds?: string[];
   tenantId?: string;
@@ -31,505 +117,331 @@ export interface UpdateUserInput {
   isActive?: boolean;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Step 1: Create the user account via POST /users.
+ * Returns the created user id.
+ */
+const createUserAccount = async (
+  input: CreateUserInput,
+  roleName: string
+): Promise<string> => {
+  const role_id = await resolveRoleId(roleName);
+  const branch_id = input.assignedBranchIds?.[0];
+  const res = await api.post('/users', {
+    full_name: input.fullName.trim(),
+    email: input.email.trim(),
+    phone: input.phone?.trim() || undefined,
+    password: input.password,
+    role_id,
+    ...(branch_id && { branch_id }),
+  });
+  const raw = res.data?.data ?? res.data;
+  return raw?.id ?? raw?.user?.id;
+};
+
 export const userApi = {
   // ================= EXECUTIVES =================
-  getExecutives: async (): Promise<{ data: User[] }> => {
-    const current = getSessionUser();
-    if (!current) throw new Error('401 Unauthorized: Session expired');
 
-    const role = normalizeRole(current.role);
-    if (role !== 'SUPER_ADMIN' && role !== 'CAFE_OWNER' && role !== 'OWNER' && role !== 'RESTAURANT_OWNER') {
-      throw new Error('403 Forbidden: You do not have permission to view executives');
+  /**
+   * List executives scoped to the logged-in user's tenant/branches.
+   */
+  getExecutives: async (): Promise<{ data: User[] }> => {
+    const user = useAuthStore.getState().user;
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+    const res = await api.get('/executives', { params: { limit: 100 } });
+    const raw: any[] = res.data?.data?.executives ?? res.data?.data ?? res.data ?? [];
+    const mapped = raw.map(mapUser);
+
+    if (!isSuperAdmin && user?.tenantId) {
+      const branchesRes = await branchApi.getAll();
+      const userBranchIds = new Set(branchesRes.data.map((b) => b.id));
+      return {
+        data: mapped.filter(
+          (u) =>
+            u.tenantId === user.tenantId ||
+            u.assignedBranchIds?.some((bid) => userBranchIds.has(bid))
+        ),
+      };
     }
 
-    const allUsers = mockStore.users;
-    const executives = allUsers.filter((u) => {
-      const uRole = normalizeRole(u.role);
-      const sameTenant = role === 'SUPER_ADMIN' || u.tenantId === current.tenantId;
-      return uRole === 'EXECUTIVE' && sameTenant && u.isActive !== false;
-    });
-
-    return { data: executives };
+    return { data: mapped };
   },
 
   createExecutive: async (input: CreateUserInput): Promise<{ data: User }> => {
-    const current = getSessionUser();
-    if (!current) throw new Error('401 Unauthorized: Session expired');
+    const userId = await createUserAccount(input, 'EXECUTIVE');
+    if (!userId) throw new Error('Failed to create user account');
 
-    const role = normalizeRole(current.role);
-    if (role !== 'SUPER_ADMIN' && role !== 'CAFE_OWNER' && role !== 'OWNER' && role !== 'RESTAURANT_OWNER') {
-      throw new Error('403 Forbidden: Only Cafe Owners can create Executives');
+    let staffId: string | undefined;
+    try {
+      const execRes = await api.post('/executives', {
+        user_id: userId,
+        branch_ids: input.assignedBranchIds || [],
+      });
+      const execRaw = execRes.data?.data?.executive ?? execRes.data?.data ?? execRes.data;
+      staffId = execRaw?.id;
+    } catch (err: any) {
+      throw new Error(
+        err?.response?.data?.message ?? err?.message ?? 'Failed to register executive'
+      );
     }
 
-    // Check email uniqueness
-    const existing = mockStore.users.find(
-      (u) => u.email.toLowerCase() === input.email.toLowerCase() && u.isActive !== false
-    );
-    if (existing) {
-      throw new Error('400 Bad Request: A user with this email address already exists');
+    if (staffId && input.assignedBranchIds?.length) {
+      try {
+        await api.post(`/executives/${staffId}/branches`, {
+          branch_ids: input.assignedBranchIds,
+        });
+      } catch {
+        // Non-fatal
+      }
     }
 
-    const newExec: User = {
-      id: `user-exec-${Date.now()}`,
-      tenantId: current.tenantId || 'tenant-1',
-      email: input.email.trim(),
-      fullName: input.fullName.trim(),
-      phone: input.phone?.trim() || '',
-      role: 'EXECUTIVE',
-      assignedBranchIds: input.assignedBranchIds || [],
-      isActive: true,
-      createdAt: new Date().toISOString(),
-    };
-
-    mockStore.users = [...mockStore.users, newExec];
-
-    // Log Audit
-    mockStore.auditLogs = [
-      {
-        id: `log-${Date.now()}`,
-        tenantId: newExec.tenantId,
-        userId: current.id,
-        userEmail: current.email,
-        userName: current.fullName,
-        action: 'CREATE_EXECUTIVE',
-        entityName: newExec.fullName,
-        details: `Created Executive account for ${newExec.fullName} (${newExec.email}) assigned to ${newExec.assignedBranchIds?.length || 0} branches`,
-        ipAddress: '197.156.104.22',
+    return {
+      data: {
+        id: userId,
+        fullName: input.fullName,
+        email: input.email,
+        phone: input.phone,
+        role: 'EXECUTIVE',
+        tenantId: '',
+        assignedBranchIds: input.assignedBranchIds ?? [],
+        isActive: true,
         createdAt: new Date().toISOString(),
-      },
-      ...mockStore.auditLogs,
-    ];
-
-    return { data: newExec };
+      } as User,
+    };
   },
 
-  updateExecutive: async (id: string, input: UpdateUserInput): Promise<{ data: User }> => {
-    const current = getSessionUser();
-    if (!current) throw new Error('401 Unauthorized: Session expired');
+  updateExecutive: async (
+    id: string,
+    input: UpdateUserInput
+  ): Promise<{ data: User }> => {
+    const payload: Record<string, any> = {};
+    if (input.fullName !== undefined) payload.full_name = input.fullName.trim();
+    if (input.email !== undefined) payload.email = input.email.trim();
+    if (input.phone !== undefined) payload.phone = input.phone.trim();
 
-    const role = normalizeRole(current.role);
-    if (role !== 'SUPER_ADMIN' && role !== 'CAFE_OWNER' && role !== 'OWNER' && role !== 'RESTAURANT_OWNER') {
-      throw new Error('403 Forbidden: Only Cafe Owners can update Executives');
+    if (Object.keys(payload).length > 0) {
+      await api.patch(`/users/${id}`, payload);
     }
 
-    const targetUser = mockStore.users.find((u) => u.id === id);
-    if (!targetUser) throw new Error('404 Not Found: Executive not found');
-
-    const updatedUsers = mockStore.users.map((u) => {
-      if (u.id === id) {
-        return {
-          ...u,
-          fullName: input.fullName !== undefined ? input.fullName.trim() : u.fullName,
-          email: input.email !== undefined ? input.email.trim() : u.email,
-          phone: input.phone !== undefined ? input.phone.trim() : u.phone,
-          assignedBranchIds: input.assignedBranchIds !== undefined ? input.assignedBranchIds : u.assignedBranchIds,
-          isActive: input.isActive !== undefined ? input.isActive : u.isActive,
-        };
+    if (input.assignedBranchIds) {
+      try {
+        const execsRes = await api.get('/executives', { params: { limit: 100 } });
+        const rawExecs: any[] = execsRes.data?.data?.executives ?? execsRes.data?.data ?? [];
+        const targetExec = rawExecs.find(
+          (e) => (e.user?.id ?? e.user_id) === id || e.id === id
+        );
+        if (targetExec?.id) {
+          await api.post(`/executives/${targetExec.id}/branches`, {
+            branch_ids: input.assignedBranchIds,
+          });
+        }
+      } catch {
+        // Non-fatal
       }
-      return u;
-    });
+    }
 
-    mockStore.users = updatedUsers;
-    const updated = updatedUsers.find((u) => u.id === id)!;
-
-    return { data: updated };
+    return {
+      data: {
+        id,
+        fullName: input.fullName ?? '',
+        email: input.email ?? '',
+        phone: input.phone,
+        role: 'EXECUTIVE',
+        tenantId: '',
+        assignedBranchIds: input.assignedBranchIds ?? [],
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      } as User,
+    };
   },
 
   deleteExecutive: async (id: string): Promise<{ data: { success: boolean } }> => {
-    const current = getSessionUser();
-    if (!current) throw new Error('401 Unauthorized: Session expired');
-
-    const role = normalizeRole(current.role);
-    if (role !== 'SUPER_ADMIN' && role !== 'CAFE_OWNER' && role !== 'OWNER' && role !== 'RESTAURANT_OWNER') {
-      throw new Error('403 Forbidden: Only Cafe Owners can deactivate Executives');
-    }
-
-    // Soft delete / deactivation
-    mockStore.users = mockStore.users.map((u) => (u.id === id ? { ...u, isActive: false } : u));
+    await api.patch(`/users/${id}/status`, { is_active: false });
     return { data: { success: true } };
   },
 
   // ================= BRANCH MANAGERS =================
-  getBranchManagers: async (branchIdFilter?: string): Promise<{ data: User[] }> => {
-    const current = getSessionUser();
-    if (!current) throw new Error('401 Unauthorized: Session expired');
 
-    const role = normalizeRole(current.role);
-    if (role === 'STAFF') {
-      throw new Error('403 Forbidden: Staff cannot view branch managers');
+  getBranchManagers: async (
+    _branchIdFilter?: string
+  ): Promise<{ data: User[] }> => {
+    const user = useAuthStore.getState().user;
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+    const res = await api.get('/branch-managers', { params: { limit: 100 } });
+    const raw: any[] = res.data?.data?.managers ?? res.data?.data ?? res.data ?? [];
+    const mapped = raw.map(mapUser);
+
+    if (!isSuperAdmin && user?.tenantId) {
+      const branchesRes = await branchApi.getAll();
+      const userBranchIds = new Set(branchesRes.data.map((b) => b.id));
+      return {
+        data: mapped.filter(
+          (u) =>
+            u.tenantId === user.tenantId ||
+            (u.branchId && userBranchIds.has(u.branchId)) ||
+            u.assignedBranchIds?.some((bid) => userBranchIds.has(bid))
+        ),
+      };
     }
 
-    const allUsers = mockStore.users;
-    let managers = allUsers.filter((u) => {
-      const uRole = normalizeRole(u.role);
-      const sameTenant = role === 'SUPER_ADMIN' || u.tenantId === current.tenantId;
-      return uRole === 'BRANCH_MANAGER' && sameTenant && u.isActive !== false;
-    });
-
-    // If Executive: only show branch managers in branches assigned to Executive
-    if (role === 'EXECUTIVE') {
-      const allowedBranchIds = current.assignedBranchIds || [];
-      managers = managers.filter((m) =>
-        m.assignedBranchIds?.some((bId) => allowedBranchIds.includes(bId))
-      );
-    } else if (role === 'BRANCH_MANAGER') {
-      // Branch manager sees their own manager profile/record in branch
-      const myBranchIds = current.assignedBranchIds || [];
-      managers = managers.filter((m) =>
-        m.assignedBranchIds?.some((bId) => myBranchIds.includes(bId))
-      );
-    }
-
-    if (branchIdFilter && branchIdFilter !== 'all') {
-      managers = managers.filter((m) => m.assignedBranchIds?.includes(branchIdFilter));
-    }
-
-    return { data: managers };
+    return { data: mapped };
   },
 
-  createBranchManager: async (input: CreateUserInput): Promise<{ data: User }> => {
-    const current = getSessionUser();
-    if (!current) throw new Error('401 Unauthorized: Session expired');
+  createBranchManager: async (
+    input: CreateUserInput
+  ): Promise<{ data: User }> => {
+    const userId = await createUserAccount(input, 'BRANCH_MANAGER');
+    if (!userId) throw new Error('Failed to create user account');
 
-    const role = normalizeRole(current.role);
-    if (role !== 'SUPER_ADMIN' && role !== 'CAFE_OWNER' && role !== 'OWNER' && role !== 'RESTAURANT_OWNER' && role !== 'EXECUTIVE') {
-      throw new Error('403 Forbidden: You do not have permission to create Branch Managers');
+    let staffId: string | undefined;
+    try {
+      const mgrRes = await api.post('/branch-managers', { user_id: userId });
+      const mgrRaw = mgrRes.data?.data?.manager ?? mgrRes.data?.data ?? mgrRes.data;
+      staffId = mgrRaw?.id;
+    } catch (err: any) {
+      throw new Error(
+        err?.response?.data?.message ?? err?.message ?? 'Failed to register branch manager'
+      );
     }
 
-    const targetBranchIds = input.assignedBranchIds || [];
-    if (targetBranchIds.length === 0) {
-      throw new Error('400 Bad Request: At least one branch must be assigned to the Branch Manager');
-    }
-
-    // If Executive, verify that all assigned branches belong to the executive's allowed branches
-    if (role === 'EXECUTIVE') {
-      const execBranches = current.assignedBranchIds || [];
-      const hasUnauthorizedBranch = targetBranchIds.some((bId) => !execBranches.includes(bId));
-      if (hasUnauthorizedBranch) {
-        throw new Error('403 Forbidden: You cannot assign a Branch Manager to a branch outside your authorized jurisdiction');
+    const branchId = input.assignedBranchIds?.[0];
+    if (staffId && branchId) {
+      try {
+        await api.post(`/branch-managers/${staffId}/assign`, { branch_id: branchId });
+      } catch {
+        // Non-fatal
       }
     }
 
-    // Check duplicate email
-    const existing = mockStore.users.find(
-      (u) => u.email.toLowerCase() === input.email.toLowerCase() && u.isActive !== false
-    );
-    if (existing) {
-      throw new Error('400 Bad Request: A user with this email address already exists');
-    }
-
-    const newManager: User = {
-      id: `user-mgr-${Date.now()}`,
-      tenantId: current.tenantId || 'tenant-1',
-      email: input.email.trim(),
-      fullName: input.fullName.trim(),
-      phone: input.phone?.trim() || '',
-      role: 'BRANCH_MANAGER',
-      assignedBranchIds: targetBranchIds,
-      isActive: true,
-      createdAt: new Date().toISOString(),
-    };
-
-    mockStore.users = [...mockStore.users, newManager];
-
-    // Log Audit
-    mockStore.auditLogs = [
-      {
-        id: `log-${Date.now()}`,
-        tenantId: newManager.tenantId,
-        userId: current.id,
-        userEmail: current.email,
-        userName: current.fullName,
-        action: 'CREATE_BRANCH_MANAGER',
-        entityName: newManager.fullName,
-        details: `Created Branch Manager ${newManager.fullName} (${newManager.email}) for branch(es) ${targetBranchIds.join(', ')}`,
-        ipAddress: '197.156.104.22',
+    return {
+      data: {
+        id: userId,
+        fullName: input.fullName,
+        email: input.email,
+        phone: input.phone,
+        role: 'BRANCH_MANAGER',
+        tenantId: '',
+        assignedBranchIds: branchId ? [branchId] : [],
+        isActive: true,
         createdAt: new Date().toISOString(),
-      },
-      ...mockStore.auditLogs,
-    ];
-
-    return { data: newManager };
+      } as User,
+    };
   },
 
-  updateBranchManager: async (id: string, input: UpdateUserInput): Promise<{ data: User }> => {
-    const current = getSessionUser();
-    if (!current) throw new Error('401 Unauthorized: Session expired');
+  updateBranchManager: async (
+    id: string,
+    input: UpdateUserInput
+  ): Promise<{ data: User }> => {
+    const branchId = input.assignedBranchIds?.[0];
+    const payload: Record<string, any> = {};
+    if (input.fullName !== undefined) payload.full_name = input.fullName.trim();
+    if (input.email !== undefined) payload.email = input.email.trim();
+    if (input.phone !== undefined) payload.phone = input.phone.trim();
+    if (branchId) payload.branch_id = branchId;
 
-    const role = normalizeRole(current.role);
-    if (role !== 'SUPER_ADMIN' && role !== 'CAFE_OWNER' && role !== 'OWNER' && role !== 'RESTAURANT_OWNER' && role !== 'EXECUTIVE') {
-      throw new Error('403 Forbidden: You do not have permission to update Branch Managers');
+    if (Object.keys(payload).length > 0) {
+      await api.patch(`/users/${id}`, payload);
     }
 
-    const targetUser = mockStore.users.find((u) => u.id === id);
-    if (!targetUser) throw new Error('404 Not Found: Branch Manager not found');
-
-    // If Executive: verify target manager is within Executive's assigned branches
-    if (role === 'EXECUTIVE') {
-      const execBranches = current.assignedBranchIds || [];
-      const managerBranches = targetUser.assignedBranchIds || [];
-      const isAuthorized = managerBranches.some((bId) => execBranches.includes(bId));
-      if (!isAuthorized) {
-        throw new Error('403 Forbidden: You cannot modify a Branch Manager outside your assigned branches');
-      }
-
-      // If changing assigned branch, ensure new branch is authorized
-      if (input.assignedBranchIds) {
-        const unauthorizedNewBranch = input.assignedBranchIds.some((bId) => !execBranches.includes(bId));
-        if (unauthorizedNewBranch) {
-          throw new Error('403 Forbidden: You cannot reassign this manager to a branch outside your jurisdiction');
+    if (branchId) {
+      try {
+        const mgrsRes = await api.get('/branch-managers', { params: { limit: 100 } });
+        const rawMgrs: any[] = mgrsRes.data?.data?.managers ?? mgrsRes.data?.data ?? [];
+        const targetMgr = rawMgrs.find(
+          (m) => (m.user?.id ?? m.user_id) === id || m.id === id
+        );
+        if (targetMgr?.id) {
+          await api.post(`/branch-managers/${targetMgr.id}/assign`, { branch_id: branchId });
         }
+      } catch {
+        // Non-fatal
       }
     }
 
-    const updatedUsers = mockStore.users.map((u) => {
-      if (u.id === id) {
-        return {
-          ...u,
-          fullName: input.fullName !== undefined ? input.fullName.trim() : u.fullName,
-          email: input.email !== undefined ? input.email.trim() : u.email,
-          phone: input.phone !== undefined ? input.phone.trim() : u.phone,
-          assignedBranchIds: input.assignedBranchIds !== undefined ? input.assignedBranchIds : u.assignedBranchIds,
-          isActive: input.isActive !== undefined ? input.isActive : u.isActive,
-        };
-      }
-      return u;
-    });
-
-    mockStore.users = updatedUsers;
-    const updated = updatedUsers.find((u) => u.id === id)!;
-
-    return { data: updated };
+    return {
+      data: {
+        id,
+        fullName: input.fullName ?? '',
+        email: input.email ?? '',
+        phone: input.phone,
+        role: 'BRANCH_MANAGER',
+        tenantId: '',
+        assignedBranchIds: input.assignedBranchIds ?? [],
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      } as User,
+    };
   },
 
-  deleteBranchManager: async (id: string): Promise<{ data: { success: boolean } }> => {
-    const current = getSessionUser();
-    if (!current) throw new Error('401 Unauthorized: Session expired');
-
-    const role = normalizeRole(current.role);
-    if (role !== 'SUPER_ADMIN' && role !== 'CAFE_OWNER' && role !== 'OWNER' && role !== 'RESTAURANT_OWNER' && role !== 'EXECUTIVE') {
-      throw new Error('403 Forbidden: You do not have permission to deactivate Branch Managers');
-    }
-
-    const targetUser = mockStore.users.find((u) => u.id === id);
-    if (!targetUser) throw new Error('404 Not Found: Branch Manager not found');
-
-    if (role === 'EXECUTIVE') {
-      const execBranches = current.assignedBranchIds || [];
-      const managerBranches = targetUser.assignedBranchIds || [];
-      const isAuthorized = managerBranches.some((bId) => execBranches.includes(bId));
-      if (!isAuthorized) {
-        throw new Error('403 Forbidden: You cannot delete a Branch Manager outside your assigned branches');
-      }
-    }
-
-    // Soft delete
-    mockStore.users = mockStore.users.map((u) => (u.id === id ? { ...u, isActive: false } : u));
+  deleteBranchManager: async (
+    id: string
+  ): Promise<{ data: { success: boolean } }> => {
+    await api.patch(`/users/${id}/status`, { is_active: false });
     return { data: { success: true } };
   },
 
   // ================= STAFF MEMBERS =================
-  getStaff: async (branchIdFilter?: string): Promise<{ data: User[] }> => {
-    const current = getSessionUser();
-    if (!current) throw new Error('401 Unauthorized: Session expired');
 
-    const role = normalizeRole(current.role);
-    const allUsers = mockStore.users;
+  getStaff: async (_branchIdFilter?: string): Promise<{ data: User[] }> => {
+    const user = useAuthStore.getState().user;
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+    const res = await api.get('/users');
+    const raw: any[] = res.data?.data ?? res.data ?? [];
+    const mapped = raw
+      .filter((u) => normalizeRole(u.role?.name ?? u.role) === 'STAFF')
+      .map(mapUser);
 
-    let staff = allUsers.filter((u) => {
-      const uRole = normalizeRole(u.role);
-      const sameTenant = role === 'SUPER_ADMIN' || u.tenantId === current.tenantId;
-      return uRole === 'STAFF' && sameTenant && u.isActive !== false;
-    });
-
-    // Scope based on role
-    if (role === 'EXECUTIVE') {
-      const execBranches = current.assignedBranchIds || [];
-      staff = staff.filter((s) => s.assignedBranchIds?.some((bId) => execBranches.includes(bId)));
-    } else if (role === 'BRANCH_MANAGER') {
-      const managerBranches = current.assignedBranchIds || [];
-      staff = staff.filter((s) => s.assignedBranchIds?.some((bId) => managerBranches.includes(bId)));
-    } else if (role === 'STAFF') {
-      // Staff member sees fellow staff in same branch
-      const myBranches = current.assignedBranchIds || [];
-      staff = staff.filter((s) => s.assignedBranchIds?.some((bId) => myBranches.includes(bId)));
+    if (!isSuperAdmin && user?.tenantId) {
+      const branchesRes = await branchApi.getAll();
+      const userBranchIds = new Set(branchesRes.data.map((b) => b.id));
+      return {
+        data: mapped.filter(
+          (u) =>
+            u.tenantId === user.tenantId ||
+            (u.branchId && userBranchIds.has(u.branchId)) ||
+            u.assignedBranchIds?.some((bid) => userBranchIds.has(bid))
+        ),
+      };
     }
 
-    if (branchIdFilter && branchIdFilter !== 'all') {
-      staff = staff.filter((s) => s.assignedBranchIds?.includes(branchIdFilter));
-    }
-
-    return { data: staff };
+    return { data: mapped };
   },
 
   createStaff: async (input: CreateUserInput): Promise<{ data: User }> => {
-    const current = getSessionUser();
-    if (!current) throw new Error('401 Unauthorized: Session expired');
-
-    const role = normalizeRole(current.role);
-    if (
-      role !== 'SUPER_ADMIN' &&
-      role !== 'CAFE_OWNER' &&
-      role !== 'OWNER' &&
-      role !== 'RESTAURANT_OWNER' &&
-      role !== 'EXECUTIVE' &&
-      role !== 'BRANCH_MANAGER'
-    ) {
-      throw new Error('403 Forbidden: Staff members cannot create other staff');
-    }
-
-    let targetBranchIds = input.assignedBranchIds || [];
-    if (role === 'BRANCH_MANAGER') {
-      // Must assign to branch manager's branch
-      targetBranchIds = current.assignedBranchIds || ['branch-1'];
-    }
-
-    if (targetBranchIds.length === 0) {
-      throw new Error('400 Bad Request: At least one branch must be assigned to staff');
-    }
-
-    if (role === 'EXECUTIVE') {
-      const execBranches = current.assignedBranchIds || [];
-      const hasUnauthorizedBranch = targetBranchIds.some((bId) => !execBranches.includes(bId));
-      if (hasUnauthorizedBranch) {
-        throw new Error('403 Forbidden: Cannot assign staff to a branch outside your authorized jurisdiction');
-      }
-    }
-
-    // Check duplicate email
-    const existing = mockStore.users.find(
-      (u) => u.email.toLowerCase() === input.email.toLowerCase() && u.isActive !== false
-    );
-    if (existing) {
-      throw new Error('400 Bad Request: A user with this email address already exists');
-    }
-
-    const newStaff: User = {
-      id: `user-staff-${Date.now()}`,
-      tenantId: current.tenantId || 'tenant-1',
+    const role_id = await resolveRoleId('STAFF');
+    const branch_id = input.assignedBranchIds?.[0];
+    const res = await api.post('/users', {
+      full_name: input.fullName.trim(),
       email: input.email.trim(),
-      fullName: input.fullName.trim(),
-      phone: input.phone?.trim() || '',
-      role: 'STAFF',
-      assignedBranchIds: targetBranchIds,
-      isActive: true,
-      createdAt: new Date().toISOString(),
-    };
-
-    mockStore.users = [...mockStore.users, newStaff];
-
-    // Log Audit
-    mockStore.auditLogs = [
-      {
-        id: `log-${Date.now()}`,
-        tenantId: newStaff.tenantId,
-        userId: current.id,
-        userEmail: current.email,
-        userName: current.fullName,
-        action: 'CREATE_STAFF',
-        entityName: newStaff.fullName,
-        details: `Created Staff Member ${newStaff.fullName} (${newStaff.email}) for branch(es) ${targetBranchIds.join(', ')}`,
-        ipAddress: '197.156.104.22',
-        createdAt: new Date().toISOString(),
-      },
-      ...mockStore.auditLogs,
-    ];
-
-    return { data: newStaff };
+      phone: input.phone?.trim() || undefined,
+      password: input.password,
+      role_id,
+      ...(branch_id && { branch_id }),
+    });
+    const raw = res.data?.data ?? res.data;
+    return { data: mapUser(raw) };
   },
 
-  updateStaff: async (id: string, input: UpdateUserInput): Promise<{ data: User }> => {
-    const current = getSessionUser();
-    if (!current) throw new Error('401 Unauthorized: Session expired');
+  updateStaff: async (
+    id: string,
+    input: UpdateUserInput
+  ): Promise<{ data: User }> => {
+    const branch_id = input.assignedBranchIds?.[0];
+    const payload: Record<string, any> = {};
+    if (input.fullName !== undefined) payload.full_name = input.fullName.trim();
+    if (input.email !== undefined) payload.email = input.email.trim();
+    if (input.phone !== undefined) payload.phone = input.phone.trim();
+    if (branch_id) payload.branch_id = branch_id;
 
-    const role = normalizeRole(current.role);
-    if (
-      role !== 'SUPER_ADMIN' &&
-      role !== 'CAFE_OWNER' &&
-      role !== 'OWNER' &&
-      role !== 'RESTAURANT_OWNER' &&
-      role !== 'EXECUTIVE' &&
-      role !== 'BRANCH_MANAGER'
-    ) {
-      throw new Error('403 Forbidden: You do not have permission to update staff');
-    }
-
-    const targetUser = mockStore.users.find((u) => u.id === id);
-    if (!targetUser) throw new Error('404 Not Found: Staff member not found');
-
-    if (role === 'EXECUTIVE') {
-      const execBranches = current.assignedBranchIds || [];
-      const staffBranches = targetUser.assignedBranchIds || [];
-      const isAuthorized = staffBranches.some((bId) => execBranches.includes(bId));
-      if (!isAuthorized) {
-        throw new Error('403 Forbidden: You cannot modify staff outside your assigned branches');
-      }
-    } else if (role === 'BRANCH_MANAGER') {
-      const managerBranches = current.assignedBranchIds || [];
-      const staffBranches = targetUser.assignedBranchIds || [];
-      const isAuthorized = staffBranches.some((bId) => managerBranches.includes(bId));
-      if (!isAuthorized) {
-        throw new Error('403 Forbidden: You cannot modify staff outside your branch');
-      }
-    }
-
-    const updatedUsers = mockStore.users.map((u) => {
-      if (u.id === id) {
-        return {
-          ...u,
-          fullName: input.fullName !== undefined ? input.fullName.trim() : u.fullName,
-          email: input.email !== undefined ? input.email.trim() : u.email,
-          phone: input.phone !== undefined ? input.phone.trim() : u.phone,
-          assignedBranchIds: input.assignedBranchIds !== undefined ? input.assignedBranchIds : u.assignedBranchIds,
-          isActive: input.isActive !== undefined ? input.isActive : u.isActive,
-        };
-      }
-      return u;
-    });
-
-    mockStore.users = updatedUsers;
-    const updated = updatedUsers.find((u) => u.id === id)!;
-
-    return { data: updated };
+    const res = await api.patch(`/users/${id}`, payload);
+    const raw = res.data?.data ?? res.data;
+    return { data: mapUser(raw) };
   },
 
   deleteStaff: async (id: string): Promise<{ data: { success: boolean } }> => {
-    const current = getSessionUser();
-    if (!current) throw new Error('401 Unauthorized: Session expired');
-
-    const role = normalizeRole(current.role);
-    if (
-      role !== 'SUPER_ADMIN' &&
-      role !== 'CAFE_OWNER' &&
-      role !== 'OWNER' &&
-      role !== 'RESTAURANT_OWNER' &&
-      role !== 'EXECUTIVE' &&
-      role !== 'BRANCH_MANAGER'
-    ) {
-      throw new Error('403 Forbidden: You do not have permission to delete staff');
-    }
-
-    const targetUser = mockStore.users.find((u) => u.id === id);
-    if (!targetUser) throw new Error('404 Not Found: Staff member not found');
-
-    if (role === 'EXECUTIVE') {
-      const execBranches = current.assignedBranchIds || [];
-      const staffBranches = targetUser.assignedBranchIds || [];
-      const isAuthorized = staffBranches.some((bId) => execBranches.includes(bId));
-      if (!isAuthorized) {
-        throw new Error('403 Forbidden: You cannot delete staff outside your assigned branches');
-      }
-    } else if (role === 'BRANCH_MANAGER') {
-      const managerBranches = current.assignedBranchIds || [];
-      const staffBranches = targetUser.assignedBranchIds || [];
-      const isAuthorized = staffBranches.some((bId) => managerBranches.includes(bId));
-      if (!isAuthorized) {
-        throw new Error('403 Forbidden: You cannot delete staff outside your branch');
-      }
-    }
-
-    // Soft delete
-    mockStore.users = mockStore.users.map((u) => (u.id === id ? { ...u, isActive: false } : u));
+    await api.patch(`/users/${id}/status`, { is_active: false });
     return { data: { success: true } };
   },
 };

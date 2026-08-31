@@ -6,6 +6,7 @@ import { branchApi } from '../../api/branch.api';
 import { menuItemApi } from '../../api/menu-item.api';
 import { tableApi } from '../../api/table.api';
 import { useAuth } from '../../hooks/useAuth';
+import { useToast } from '../../hooks/useToast';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { MenuGrid } from '../../components/menu/MenuGrid';
 import { Button } from '../../components/ui/Button';
@@ -13,6 +14,7 @@ import { Store, GitBranch, UtensilsCrossed, Table as TableIcon, QrCode, External
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [tenant, setTenant] = useState<any>(null);
   const [branches, setBranches] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
@@ -29,14 +31,23 @@ export const DashboardPage: React.FC = () => {
     ])
       .then(([tRes, bRes, mRes, tblRes]) => {
         setTenant(tRes.data);
-        setBranches(bRes.data);
-        setMenuItems(mRes.data);
-        setTables(tblRes.data);
+        setBranches(Array.isArray(bRes.data) ? bRes.data : []);
+        setMenuItems(Array.isArray(mRes.data) ? mRes.data : []);
+        setTables(Array.isArray(tblRes.data) ? tblRes.data : []);
+      })
+      .catch(() => {
+        setTenant(null);
+        setBranches([]);
+        setMenuItems([]);
+        setTables([]);
+        showToast('Failed to load dashboard data', 'error');
       })
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [showToast]);
 
-  const featuredDishes = menuItems.filter((i) => i.isFeatured).slice(0, 3);
+  const featuredDishes = Array.isArray(menuItems)
+    ? menuItems.filter((i) => i.isFeatured).slice(0, 3)
+    : [];
 
   // Filter branches based on assigned ids
   const assignedBranches =
