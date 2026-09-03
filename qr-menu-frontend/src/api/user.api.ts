@@ -4,13 +4,74 @@ import { normalizeRole } from '../utils/roles';
 import { branchApi } from './branch.api';
 import { useAuthStore } from '../store/useAuthStore';
 
-// ─── Backend → Frontend mapper ─────────────────────────────────────────────────
-/**
- * Maps a raw user object from the backend (snake_case) to the frontend User type.
- * Handles both /users response shape and /executives|/branch-managers response shape.
- */
-const mapUser = (raw: any): User => {
-  const userData = raw.user ?? raw;
+// ---------------------------------------------------------------------------
+// Raw API shapes (as sent by the backend before mapping)
+// ---------------------------------------------------------------------------
+
+interface RawStaffProfile {
+  branch_id?: string;
+  branch?: { id?: string; tenant_id?: string };
+}
+
+interface RawExecutiveBranch {
+  id?: string;
+  branch_id?: string;
+  branch?: { id?: string };
+}
+
+interface RawUserCore {
+  id?: string;
+  email?: string;
+  full_name?: string;
+  fullName?: string;
+  phone?: string;
+  profile_image?: string;
+  profileImage?: string;
+  role?: string | { name?: string };
+  tenant_id?: string;
+  tenantId?: string;
+  is_active?: boolean;
+  isActive?: boolean;
+  created_at?: string;
+  createdAt?: string;
+  staff_profile?: RawStaffProfile[];
+}
+
+interface RawUserEnvelope extends RawUserCore {
+  user?: RawUserCore;
+  branch?: { id?: string; tenant_id?: string };
+  branch_id?: string;
+  executive_branches?: RawExecutiveBranch[];
+  assignedBranchIds?: string[];
+  assigned_branch_ids?: string[];
+}
+
+interface ApiEnvelope<T> {
+  data?: T;
+}
+
+interface RoleRecord {
+  id: string;
+  name: string;
+}
+
+interface ApiErrorResponse {
+  response?: {
+    data?: {
+      message?: string;
+    };
+  };
+  message?: string;
+}
+
+export type UserWithStaffId = User & { _staffId?: string };
+
+// ---------------------------------------------------------------------------
+// Backend → Frontend mapper
+// ---------------------------------------------------------------------------
+
+const mapUser = (raw: RawUserEnvelope): UserWithStaffId => {
+  const userData: RawUserCore = raw.user ?? raw;
   const branchId: string | undefined =
     raw.branch?.id ??
     raw.branch_id ??
@@ -20,11 +81,10 @@ const mapUser = (raw: any): User => {
     userData.staff_profile?.[0]?.branch?.id ??
     undefined;
 
-  // Extract assigned branch IDs from raw.executive_branches (multi-branch executives)
   const executiveBranchIds: string[] = Array.isArray(raw.executive_branches)
     ? raw.executive_branches
-        .map((eb: any) => eb.branch?.id ?? eb.branch_id ?? eb.id)
-        .filter(Boolean)
+        .map((eb) => eb.branch?.id ?? eb.branch_id ?? eb.id)
+        .filter((id): id is string => Boolean(id))
     : [];
 
   const assignedBranchIds: string[] =
@@ -34,16 +94,18 @@ const mapUser = (raw: any): User => {
       ? [branchId]
       : raw.assignedBranchIds ?? raw.assigned_branch_ids ?? [];
 
-  return {
-    id: userData.id ?? raw.id,
+  const base: User = {
+    id: userData.id ?? raw.id ?? '',
     email: userData.email ?? raw.email ?? '',
     fullName: userData.full_name ?? userData.fullName ?? raw.full_name ?? raw.fullName ?? '',
     phone: userData.phone ?? raw.phone ?? undefined,
     profileImage: userData.profile_image ?? userData.profileImage ?? undefined,
     role: (
-      typeof raw.role === 'object' ? raw.role?.name
-        : typeof userData.role === 'object' ? userData.role?.name
-          : raw.role ?? userData.role
+      typeof raw.role === 'object'
+        ? raw.role?.name
+        : typeof userData.role === 'object'
+        ? userData.role?.name
+        : raw.role ?? userData.role
     ) as UserRole,
     tenantId:
       raw.branch?.tenant_id ??
@@ -58,19 +120,57 @@ const mapUser = (raw: any): User => {
     assignedBranchIds,
     isActive: raw.is_active ?? userData.is_active ?? raw.isActive ?? userData.isActive ?? true,
     createdAt: raw.created_at ?? raw.createdAt ?? userData.created_at ?? new Date().toISOString(),
+  };
+
+  return {
+    ...base,
     _staffId: raw.id !== userData.id ? raw.id : undefined,
-  } as any;
+  };
 };
 
-// ─── Role ID cache (avoid fetching roles on every call) ───────────────────────
+const extractRawList = (data: unknown, ...keys: string[]): RawUserEnvelope[] => {
+  if (Array.isArray(data)) return data as RawUserEnvelope[];
+  if (data && typeof data === 'object') {
+    for (const key of keys) {
+      const val = (data as Record<string, unknown>)[key];
+      if (Array.isArray(val)) return val as RawUserEnvelope[];
+    }
+  }
+  return [];
+};
+
+const extractRawOne = (data: unknown, ...keys: string[]): RawUserEnvelope => {
+  if (data && typeof data === 'object') {
+    for (const key of keys) {
+      const val = (data as Record<string, unknown>)[key];
+      if (val && typeof val === 'object') return val as RawUserEnvelope;
+    }
+  }
+  return (data as RawUserEnvelope) ?? {};
+};
+
+const getErrorMessage = (err: unknown, fallback: string): string => {
+  const apiErr = err as ApiErrorResponse;
+  return apiErr?.response?.data?.message ?? apiErr?.message ?? fallback;
+};
+
+/** Re-throws as a friendly Error while preserving the original error via `cause`. */
+const throwWithCause = (err: unknown, fallback: string): never => {
+  throw new Error(getErrorMessage(err, fallback), { cause: err });
+};
+
+// ---------------------------------------------------------------------------
+// Role ID cache (avoid fetching roles on every call)
+// ---------------------------------------------------------------------------
+
 let cachedRoleMap: Record<string, string> | null = null;
 
 const getRoleMap = async (): Promise<Record<string, string>> => {
   if (cachedRoleMap) return cachedRoleMap;
 
-  const res = await api.get('/roles');
-  const roles: Array<{ id: string; name: string }> =
-    res.data?.data ?? res.data ?? [];
+  const res = await api.get<ApiEnvelope<RoleRecord[]> | RoleRecord[]>('/roles');
+  const payload = (res.data as ApiEnvelope<RoleRecord[]>)?.data ?? res.data;
+  const roles: RoleRecord[] = Array.isArray(payload) ? payload : [];
 
   cachedRoleMap = {};
   for (const r of roles) {
@@ -89,14 +189,14 @@ const resolveRoleId = async (roleName: string): Promise<string> => {
   const norm = normalizeRole(roleName);
   const id = map[norm] ?? map[roleName.toUpperCase()];
   if (!id) {
-    throw new Error(
-      `Role "${roleName}" not found. Make sure the backend has this role seeded.`
-    );
+    throw new Error(`Role "${roleName}" not found. Make sure the backend has this role seeded.`);
   }
   return id;
 };
 
-// ─── Public API surface ────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Public API surface
+// ---------------------------------------------------------------------------
 
 export interface CreateUserInput {
   fullName: string;
@@ -117,19 +217,21 @@ export interface UpdateUserInput {
   isActive?: boolean;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+interface UpdateUserRequestBody {
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  branch_id?: string;
+}
 
-/**
- * Step 1: Create the user account via POST /users.
- * Returns the created user id.
- */
-const createUserAccount = async (
-  input: CreateUserInput,
-  roleName: string
-): Promise<string> => {
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+const createUserAccount = async (input: CreateUserInput, roleName: string): Promise<string> => {
   const role_id = await resolveRoleId(roleName);
   const branch_id = input.assignedBranchIds?.[0];
-  const res = await api.post('/users', {
+  const res = await api.post<ApiEnvelope<RawUserEnvelope>>('/users', {
     full_name: input.fullName.trim(),
     email: input.email.trim(),
     phone: input.phone?.trim() || undefined,
@@ -137,21 +239,22 @@ const createUserAccount = async (
     role_id,
     ...(branch_id && { branch_id }),
   });
-  const raw = res.data?.data ?? res.data;
-  return raw?.id ?? raw?.user?.id;
+  const raw = res.data.data ?? {};
+  return raw.id ?? raw.user?.id ?? '';
 };
+
+// ---------------------------------------------------------------------------
+// API
+// ---------------------------------------------------------------------------
 
 export const userApi = {
   // ================= EXECUTIVES =================
 
-  /**
-   * List executives scoped to the logged-in user's tenant/branches.
-   */
   getExecutives: async (): Promise<{ data: User[] }> => {
     const user = useAuthStore.getState().user;
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-    const res = await api.get('/executives', { params: { limit: 100 } });
-    const raw: any[] = res.data?.data?.executives ?? res.data?.data ?? res.data ?? [];
+    const res = await api.get<ApiEnvelope<unknown>>('/executives', { params: { limit: 100 } });
+    const raw = extractRawList(res.data.data, 'executives');
     const mapped = raw.map(mapUser);
 
     if (!isSuperAdmin && user?.tenantId) {
@@ -175,16 +278,14 @@ export const userApi = {
 
     let staffId: string | undefined;
     try {
-      const execRes = await api.post('/executives', {
+      const execRes = await api.post<ApiEnvelope<unknown>>('/executives', {
         user_id: userId,
         branch_ids: input.assignedBranchIds || [],
       });
-      const execRaw = execRes.data?.data?.executive ?? execRes.data?.data ?? execRes.data;
-      staffId = execRaw?.id;
-    } catch (err: any) {
-      throw new Error(
-        err?.response?.data?.message ?? err?.message ?? 'Failed to register executive'
-      );
+      const execRaw = extractRawOne(execRes.data.data, 'executive');
+      staffId = execRaw.id;
+    } catch (err) {
+      throwWithCause(err, 'Failed to register executive');
     }
 
     if (staffId && input.assignedBranchIds?.length) {
@@ -212,11 +313,8 @@ export const userApi = {
     };
   },
 
-  updateExecutive: async (
-    id: string,
-    input: UpdateUserInput
-  ): Promise<{ data: User }> => {
-    const payload: Record<string, any> = {};
+  updateExecutive: async (id: string, input: UpdateUserInput): Promise<{ data: User }> => {
+    const payload: UpdateUserRequestBody = {};
     if (input.fullName !== undefined) payload.full_name = input.fullName.trim();
     if (input.email !== undefined) payload.email = input.email.trim();
     if (input.phone !== undefined) payload.phone = input.phone.trim();
@@ -227,11 +325,11 @@ export const userApi = {
 
     if (input.assignedBranchIds) {
       try {
-        const execsRes = await api.get('/executives', { params: { limit: 100 } });
-        const rawExecs: any[] = execsRes.data?.data?.executives ?? execsRes.data?.data ?? [];
-        const targetExec = rawExecs.find(
-          (e) => (e.user?.id ?? e.user_id) === id || e.id === id
-        );
+        const execsRes = await api.get<ApiEnvelope<unknown>>('/executives', {
+          params: { limit: 100 },
+        });
+        const rawExecs = extractRawList(execsRes.data.data, 'executives');
+        const targetExec = rawExecs.find((e) => (e.user?.id ?? e.id) === id || e.id === id);
         if (targetExec?.id) {
           await api.post(`/executives/${targetExec.id}/branches`, {
             branch_ids: input.assignedBranchIds,
@@ -269,8 +367,10 @@ export const userApi = {
   ): Promise<{ data: User[] }> => {
     const user = useAuthStore.getState().user;
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-    const res = await api.get('/branch-managers', { params: { limit: 100 } });
-    const raw: any[] = res.data?.data?.managers ?? res.data?.data ?? res.data ?? [];
+    const res = await api.get<ApiEnvelope<unknown>>('/branch-managers', {
+      params: { limit: 100 },
+    });
+    const raw = extractRawList(res.data.data, 'managers');
     const mapped = raw.map(mapUser);
 
     if (!isSuperAdmin && user?.tenantId) {
@@ -289,21 +389,19 @@ export const userApi = {
     return { data: mapped };
   },
 
-  createBranchManager: async (
-    input: CreateUserInput
-  ): Promise<{ data: User }> => {
+  createBranchManager: async (input: CreateUserInput): Promise<{ data: User }> => {
     const userId = await createUserAccount(input, 'BRANCH_MANAGER');
     if (!userId) throw new Error('Failed to create user account');
 
     let staffId: string | undefined;
     try {
-      const mgrRes = await api.post('/branch-managers', { user_id: userId });
-      const mgrRaw = mgrRes.data?.data?.manager ?? mgrRes.data?.data ?? mgrRes.data;
-      staffId = mgrRaw?.id;
-    } catch (err: any) {
-      throw new Error(
-        err?.response?.data?.message ?? err?.message ?? 'Failed to register branch manager'
-      );
+      const mgrRes = await api.post<ApiEnvelope<unknown>>('/branch-managers', {
+        user_id: userId,
+      });
+      const mgrRaw = extractRawOne(mgrRes.data.data, 'manager');
+      staffId = mgrRaw.id;
+    } catch (err) {
+      throwWithCause(err, 'Failed to register branch manager');
     }
 
     const branchId = input.assignedBranchIds?.[0];
@@ -330,12 +428,9 @@ export const userApi = {
     };
   },
 
-  updateBranchManager: async (
-    id: string,
-    input: UpdateUserInput
-  ): Promise<{ data: User }> => {
+  updateBranchManager: async (id: string, input: UpdateUserInput): Promise<{ data: User }> => {
     const branchId = input.assignedBranchIds?.[0];
-    const payload: Record<string, any> = {};
+    const payload: UpdateUserRequestBody = {};
     if (input.fullName !== undefined) payload.full_name = input.fullName.trim();
     if (input.email !== undefined) payload.email = input.email.trim();
     if (input.phone !== undefined) payload.phone = input.phone.trim();
@@ -347,11 +442,11 @@ export const userApi = {
 
     if (branchId) {
       try {
-        const mgrsRes = await api.get('/branch-managers', { params: { limit: 100 } });
-        const rawMgrs: any[] = mgrsRes.data?.data?.managers ?? mgrsRes.data?.data ?? [];
-        const targetMgr = rawMgrs.find(
-          (m) => (m.user?.id ?? m.user_id) === id || m.id === id
-        );
+        const mgrsRes = await api.get<ApiEnvelope<unknown>>('/branch-managers', {
+          params: { limit: 100 },
+        });
+        const rawMgrs = extractRawList(mgrsRes.data.data, 'managers');
+        const targetMgr = rawMgrs.find((m) => (m.user?.id ?? m.id) === id || m.id === id);
         if (targetMgr?.id) {
           await api.post(`/branch-managers/${targetMgr.id}/assign`, { branch_id: branchId });
         }
@@ -375,22 +470,27 @@ export const userApi = {
     };
   },
 
-  deleteBranchManager: async (
-    id: string
-  ): Promise<{ data: { success: boolean } }> => {
+  deleteBranchManager: async (id: string): Promise<{ data: { success: boolean } }> => {
     await api.patch(`/users/${id}/status`, { is_active: false });
     return { data: { success: true } };
   },
 
   // ================= STAFF MEMBERS =================
 
-  getStaff: async (_branchIdFilter?: string): Promise<{ data: User[] }> => {
+  getStaff: async (
+    _branchIdFilter?: string
+  ): Promise<{ data: User[] }> => {
     const user = useAuthStore.getState().user;
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-    const res = await api.get('/users');
-    const raw: any[] = res.data?.data ?? res.data ?? [];
+    const res = await api.get<ApiEnvelope<RawUserEnvelope[]> | RawUserEnvelope[]>('/users');
+    const payload = (res.data as ApiEnvelope<RawUserEnvelope[]>)?.data ?? res.data;
+    const raw: RawUserEnvelope[] = Array.isArray(payload) ? payload : [];
+
     const mapped = raw
-      .filter((u) => normalizeRole(u.role?.name ?? u.role) === 'STAFF')
+      .filter((u) => {
+        const roleVal = typeof u.role === 'object' ? u.role?.name : u.role;
+        return normalizeRole(roleVal ?? '') === 'STAFF';
+      })
       .map(mapUser);
 
     if (!isSuperAdmin && user?.tenantId) {
@@ -412,7 +512,7 @@ export const userApi = {
   createStaff: async (input: CreateUserInput): Promise<{ data: User }> => {
     const role_id = await resolveRoleId('STAFF');
     const branch_id = input.assignedBranchIds?.[0];
-    const res = await api.post('/users', {
+    const res = await api.post<ApiEnvelope<RawUserEnvelope>>('/users', {
       full_name: input.fullName.trim(),
       email: input.email.trim(),
       phone: input.phone?.trim() || undefined,
@@ -420,23 +520,20 @@ export const userApi = {
       role_id,
       ...(branch_id && { branch_id }),
     });
-    const raw = res.data?.data ?? res.data;
+    const raw = res.data.data ?? {};
     return { data: mapUser(raw) };
   },
 
-  updateStaff: async (
-    id: string,
-    input: UpdateUserInput
-  ): Promise<{ data: User }> => {
+  updateStaff: async (id: string, input: UpdateUserInput): Promise<{ data: User }> => {
     const branch_id = input.assignedBranchIds?.[0];
-    const payload: Record<string, any> = {};
+    const payload: UpdateUserRequestBody = {};
     if (input.fullName !== undefined) payload.full_name = input.fullName.trim();
     if (input.email !== undefined) payload.email = input.email.trim();
     if (input.phone !== undefined) payload.phone = input.phone.trim();
     if (branch_id) payload.branch_id = branch_id;
 
-    const res = await api.patch(`/users/${id}`, payload);
-    const raw = res.data?.data ?? res.data;
+    const res = await api.patch<ApiEnvelope<RawUserEnvelope>>(`/users/${id}`, payload);
+    const raw = res.data.data ?? {};
     return { data: mapUser(raw) };
   },
 

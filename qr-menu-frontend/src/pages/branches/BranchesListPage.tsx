@@ -289,7 +289,7 @@ export const BranchesListPage: React.FC = () => {
           />
           <Input
             label="Phone Number *"
-            placeholder="+1 (555) 019-2834"
+            placeholder="+251 9_________"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             required

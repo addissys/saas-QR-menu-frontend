@@ -1,12 +1,63 @@
+import { AxiosResponse } from 'axios';
 import api from './axios';
 import { Branch } from '../types';
 import { useAuthStore } from '../store/useAuthStore';
 import { tenantApi } from './tenant.api';
 
-const mapBranch = (branch: any): Branch => ({
+// ---------------------------------------------------------------------------
+// Raw API shapes (snake_case, as sent by the backend before mapping)
+// ---------------------------------------------------------------------------
+
+interface RawBranch {
+  id: string;
+  tenant_id?: string;
+  tenantId?: string;
+  tenant?: {
+    id?: string;
+    business_name?: string;
+  };
+  branch_name?: string;
+  name?: string;
+  address?: string;
+  city?: string;
+  phone?: string;
+  opening_hours?: Branch['openingHours'];
+  openingHours?: Branch['openingHours'];
+  is_active?: boolean;
+  isActive?: boolean;
+  status?: string;
+  created_at?: string;
+  createdAt?: string;
+}
+
+interface ApiEnvelope<T> {
+  data?: T;
+}
+
+interface BranchListPayload {
+  branches?: RawBranch[];
+}
+
+interface BranchDetailPayload {
+  branch?: RawBranch;
+}
+
+type CreateBranchPayload = Partial<Branch> & {
+  name: string;
+  address: string;
+  phone?: string;
+  city?: string;
+  branchCode?: string;
+};
+
+// ---------------------------------------------------------------------------
+// Mapping helpers
+// ---------------------------------------------------------------------------
+
+const mapBranch = (branch: RawBranch): Branch => ({
   id: branch.id,
   tenantId: branch.tenant_id ?? branch.tenantId ?? branch.tenant?.id ?? '',
-  tenantName: branch.tenant?.business_name ?? branch.tenantName ?? '',
+  tenantName: branch.tenant?.business_name ?? '',
   name: branch.branch_name ?? branch.name ?? '',
   address: branch.address ?? '',
   city: branch.city ?? '',
@@ -16,11 +67,29 @@ const mapBranch = (branch: any): Branch => ({
   createdAt: branch.created_at ?? branch.createdAt ?? new Date().toISOString(),
 });
 
-const unwrapBranches = (response: any): Branch[] => {
-  const payload = response.data?.data ?? response.data;
-  const branches = payload?.branches ?? payload;
+const unwrapBranches = (
+  response: AxiosResponse<ApiEnvelope<BranchListPayload | RawBranch[]> | RawBranch[]>
+): Branch[] => {
+  const body = response.data as ApiEnvelope<BranchListPayload | RawBranch[]> | RawBranch[];
+  const payload = Array.isArray(body) ? body : body?.data ?? body;
+  const branches = Array.isArray(payload)
+    ? payload
+    : (payload as BranchListPayload)?.branches;
+
   return Array.isArray(branches) ? branches.map(mapBranch) : [];
 };
+
+const unwrapBranch = (
+  response: AxiosResponse<ApiEnvelope<BranchDetailPayload | RawBranch>>
+): Branch => {
+  const payload = response.data.data;
+  const raw = (payload as BranchDetailPayload)?.branch ?? (payload as RawBranch);
+  return mapBranch(raw);
+};
+
+// ---------------------------------------------------------------------------
+// API
+// ---------------------------------------------------------------------------
 
 export const branchApi = {
   getAll: async (): Promise<{ data: Branch[] }> => {
@@ -33,10 +102,12 @@ export const branchApi = {
       params.tenant_id = tenantId;
     }
 
-    const response = await api.get('/branches', { params });
+    const response = await api.get<ApiEnvelope<BranchListPayload | RawBranch[]> | RawBranch[]>(
+      '/branches',
+      { params }
+    );
     const all = unwrapBranches(response);
 
-    // Multi-tenant isolation guard: filter out any branches not belonging to user's tenant
     if (tenantId && !isSuperAdmin) {
       return { data: all.filter((b) => b.tenantId === tenantId) };
     }
@@ -45,16 +116,20 @@ export const branchApi = {
   },
 
   getAllGlobal: async (): Promise<{ data: Branch[] }> => {
-    const response = await api.get('/branches');
+    const response = await api.get<ApiEnvelope<BranchListPayload | RawBranch[]> | RawBranch[]>(
+      '/branches'
+    );
     return { data: unwrapBranches(response) };
   },
 
   getById: async (id: string): Promise<{ data: Branch }> => {
-    const response = await api.get(`/branches/${id}`);
-    return { data: mapBranch(response.data.data?.branch ?? response.data.data) };
+    const response = await api.get<ApiEnvelope<BranchDetailPayload | RawBranch>>(
+      `/branches/${id}`
+    );
+    return { data: unwrapBranch(response) };
   },
 
-  create: async (payload: Partial<Branch> & { name: string; address: string; phone?: string; city?: string }): Promise<{ data: Branch }> => {
+  create: async (payload: CreateBranchPayload): Promise<{ data: Branch }> => {
     let tenantId = payload.tenantId || useAuthStore.getState().user?.tenantId;
     if (!tenantId) {
       try {
@@ -70,9 +145,9 @@ export const branchApi = {
     }
 
     const cleanName = payload.name.trim().replace(/[^a-zA-Z0-9]+/g, '-').toUpperCase();
-    const branchCode = (payload as any).branchCode || `${cleanName}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const branchCode = payload.branchCode || `${cleanName}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const response = await api.post('/branches', {
+    const response = await api.post<ApiEnvelope<BranchDetailPayload | RawBranch>>('/branches', {
       tenant_id: tenantId,
       branch_name: payload.name.trim(),
       branch_code: branchCode,
@@ -81,18 +156,23 @@ export const branchApi = {
       phone: payload.phone?.trim() || undefined,
       is_active: payload.isActive ?? true,
     });
-    return { data: mapBranch(response.data.data?.branch ?? response.data.data) };
+
+    return { data: unwrapBranch(response) };
   },
 
   update: async (id: string, payload: Partial<Branch>): Promise<{ data: Branch }> => {
-    const response = await api.patch(`/branches/${id}`, {
-      ...(payload.name !== undefined && { branch_name: payload.name.trim() }),
-      ...(payload.address !== undefined && { address: payload.address.trim() }),
-      ...(payload.city !== undefined && { city: payload.city.trim() }),
-      ...(payload.phone !== undefined && { phone: payload.phone.trim() }),
-      ...(payload.isActive !== undefined && { is_active: payload.isActive }),
-    });
-    return { data: mapBranch(response.data.data?.branch ?? response.data.data) };
+    const response = await api.patch<ApiEnvelope<BranchDetailPayload | RawBranch>>(
+      `/branches/${id}`,
+      {
+        ...(payload.name !== undefined && { branch_name: payload.name.trim() }),
+        ...(payload.address !== undefined && { address: payload.address.trim() }),
+        ...(payload.city !== undefined && { city: payload.city.trim() }),
+        ...(payload.phone !== undefined && { phone: payload.phone.trim() }),
+        ...(payload.isActive !== undefined && { is_active: payload.isActive }),
+      }
+    );
+
+    return { data: unwrapBranch(response) };
   },
 
   toggleActive: async (id: string, isActive: boolean): Promise<{ data: Branch }> => {
@@ -100,7 +180,7 @@ export const branchApi = {
   },
 
   delete: async (id: string): Promise<{ data: { success: boolean } }> => {
-    const response = await api.delete(`/branches/${id}`);
-    return response.data;
+    const response = await api.delete<{ success: boolean }>(`/branches/${id}`);
+    return response.data as unknown as { data: { success: boolean } };
   },
 };
