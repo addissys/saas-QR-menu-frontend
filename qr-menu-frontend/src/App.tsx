@@ -37,14 +37,13 @@ import { UserProfilePage } from './pages/Profile/UserProfilePage';
 import { ChangePasswordPage } from './pages/Profile/ChangePasswordPage';
 
 // User & Role Hierarchy Management Pages
-import { ExecutivesListPage } from './pages/users/ExecutivesListPage';
-import { BranchManagersListPage } from './pages/users/BranchManagersListPage';
-import { StaffListPage } from './pages/users/StaffListPage';
+import { UserManagementPage } from './pages/users/UserManagementPage';
 
 
 // Super Admin Pages
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
 import { AdminRestaurantsPage } from './pages/admin/AdminRestaurantsPage';
+import { AdminTenantDetailsPage } from './pages/admin/AdminTenantDetailsPage';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminBranchesPage } from './pages/admin/AdminBranchesPage';
 import { AdminMenuItemsPage } from './pages/admin/AdminMenuItemsPage';
@@ -101,20 +100,19 @@ export default function App() {
           <Route path="/audit-logs" element={<AuditLogsPage />} />
           <Route path="/profile" element={<UserProfilePage />} />
           <Route path="/change-password" element={<ChangePasswordPage />} />
-          <Route path="/executives" element={<ExecutivesListPage />} />
         </Route>
 
                     {/* . Staff Management Routes (Cafe Owner, Executive, Branch Manager) */}
             <Route
               element={
                 <ProtectedRoute>
-                  <RoleProtectedRoute allowedRoles={['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER']}>
+                  <RoleProtectedRoute allowedRoles={['SUPER_ADMIN', 'CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER']}>
                     <DashboardLayout />
                   </RoleProtectedRoute>
                 </ProtectedRoute>
               }
             >
-              <Route path="/staff-members" element={<StaffListPage />} />
+              <Route path="/staff-members" element={<UserManagementPage />} />
             </Route>
 
         {/* . Branch Manager Management Routes (Cafe Owner & Executive) */}
@@ -127,7 +125,6 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
-              <Route path="/branch-managers" element={<BranchManagersListPage />} />
             </Route>
 
         {/* 4. Super Admin Management Routes */}
@@ -142,6 +139,7 @@ export default function App() {
         >
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/restaurants" element={<AdminRestaurantsPage />} />
+          <Route path="/admin/restaurants/:tenantId" element={<AdminTenantDetailsPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/branches" element={<AdminBranchesPage />} />
           <Route path="/admin/menu-items" element={<AdminMenuItemsPage />} />

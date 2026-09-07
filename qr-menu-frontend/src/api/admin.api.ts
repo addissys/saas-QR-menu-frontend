@@ -2,7 +2,130 @@ import api from './axios';
 import { Tenant, User } from '../types';
 import { normalizeRole } from '../utils/roles';
 
-const mapTenant = (t: any): Tenant => ({
+// ---------------------------------------------------------------------------
+// Raw API shapes (as sent by the backend before mapping)
+// ---------------------------------------------------------------------------
+
+interface RawOwner {
+  id?: string;
+  full_name?: string;
+}
+
+interface RawTenant {
+  id: string;
+  business_name?: string;
+  businessName?: string;
+  business_slug?: string;
+  businessSlug?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  logo_url?: string;
+  logoUrl?: string;
+  brand_color?: string;
+  brandColor?: string;
+  primaryColor?: string;
+  currency_symbol?: string;
+  currencySymbol?: string;
+  description?: string;
+  status?: string;
+  is_active?: boolean;
+  isActive?: boolean;
+  owner_id?: string;
+  ownerId?: string;
+  owner?: RawOwner;
+  ownerName?: string;
+  created_at?: string;
+  createdAt?: string;
+}
+
+interface RawUser {
+  id: string;
+  tenant_id?: string;
+  tenantId?: string;
+  email?: string;
+  full_name?: string;
+  fullName?: string;
+  phone?: string;
+  profile_image?: string;
+  profileImage?: string;
+  role?: string | { name?: string };
+  is_active?: boolean;
+  isActive?: boolean;
+  created_at?: string;
+  createdAt?: string;
+}
+
+/** Branches/menuItems in admin search are returned raw (not mapped) — same as original behavior. */
+interface RawSearchBranch {
+  id: string;
+  [key: string]: unknown;
+}
+
+interface RawSearchMenuItem {
+  id: string;
+  [key: string]: unknown;
+}
+
+interface ApiEnvelope<T> {
+  data?: T;
+}
+
+interface DashboardPayload {
+  statistics?: DashboardStatistics;
+}
+
+interface DashboardMetric {
+  total: number;
+  active?: number;
+}
+
+interface DashboardStatistics {
+  tenants?: DashboardMetric;
+  users?: DashboardMetric;
+  branches?: DashboardMetric;
+  menuItems?: DashboardMetric;
+}
+
+interface SearchResultsPayload {
+  results?: SearchResults;
+}
+
+interface SearchResults {
+  tenants?: RawTenant[];
+  users?: RawUser[];
+  branches?: RawSearchBranch[];
+  menuItems?: RawSearchMenuItem[];
+}
+
+interface SearchResponse {
+  tenants: Tenant[];
+  users: User[];
+  branches: RawSearchBranch[];
+  menuItems: RawSearchMenuItem[];
+}
+
+interface TenantListPayload {
+  tenants?: RawTenant[];
+}
+
+interface TenantDetailPayload {
+  tenant?: RawTenant;
+}
+
+interface CreateTenantPayload {
+  name: string;
+  email: string;
+  password: string;
+}
+
+// ---------------------------------------------------------------------------
+// Mapping helpers
+// ---------------------------------------------------------------------------
+
+const mapTenant = (t: RawTenant): Tenant => ({
   id: t.id,
   businessName: t.business_name ?? t.businessName ?? '',
   businessSlug: t.business_slug ?? t.businessSlug,
@@ -23,38 +146,48 @@ const mapTenant = (t: any): Tenant => ({
   createdAt: t.created_at ?? t.createdAt ?? new Date().toISOString(),
 });
 
-const mapUser = (u: any): User => ({
+const mapUser = (u: RawUser): User => ({
   id: u.id,
   tenantId: u.tenant_id ?? u.tenantId ?? '',
   email: u.email ?? '',
   fullName: u.full_name ?? u.fullName ?? u.email ?? 'User',
   phone: u.phone ?? undefined,
   profileImage: u.profile_image ?? u.profileImage,
-  role: (typeof u.role === 'object' ? u.role?.name : u.role) as any,
+  role: (typeof u.role === 'object' ? u.role?.name : u.role) as User['role'],
   isActive: u.is_active ?? u.isActive ?? true,
   createdAt: u.created_at ?? u.createdAt ?? new Date().toISOString(),
 });
 
+// ---------------------------------------------------------------------------
+// API
+// ---------------------------------------------------------------------------
+
 export const adminApi = {
   // GET /api/v1/admin/dashboard
-  getDashboard: async () => {
-    const response = await api.get('/admin/dashboard');
-    const payload = response.data?.data;
-    return payload?.statistics ?? payload;
+  getDashboard: async (): Promise<DashboardStatistics> => {
+    const response = await api.get<ApiEnvelope<DashboardPayload | DashboardStatistics>>(
+      '/admin/dashboard'
+    );
+    const payload = response.data.data;
+    return (payload as DashboardPayload)?.statistics ?? (payload as DashboardStatistics) ?? {};
   },
 
   // GET /api/v1/admin/search
-  search: async (query: string) => {
-    const response = await api.get('/admin/search', {
-      params: {
-        query,
-        page: 1,
-        limit: 50,
-      },
-    });
+  search: async (query: string): Promise<SearchResponse> => {
+    const response = await api.get<ApiEnvelope<SearchResultsPayload | SearchResults>>(
+      '/admin/search',
+      {
+        params: {
+          query,
+          page: 1,
+          limit: 50,
+        },
+      }
+    );
 
-    const payload = response.data?.data;
-    const results = payload?.results ?? payload ?? {};
+    const payload = response.data.data;
+    const results: SearchResults =
+      (payload as SearchResultsPayload)?.results ?? (payload as SearchResults) ?? {};
 
     return {
       tenants: Array.isArray(results.tenants) ? results.tenants.map(mapTenant) : [],
@@ -66,44 +199,57 @@ export const adminApi = {
 
   // GET /api/v1/admin/tenants
   getTenants: async (): Promise<Tenant[]> => {
-    const response = await api.get('/admin/tenants', { params: { limit: 100 } });
-    const payload = response.data?.data;
-    const tenants = payload?.tenants ?? payload;
+    const response = await api.get<ApiEnvelope<TenantListPayload | RawTenant[]>>(
+      '/admin/tenants',
+      { params: { limit: 100 } }
+    );
+    const payload = response.data.data;
+    const tenants = Array.isArray(payload) ? payload : (payload as TenantListPayload)?.tenants;
     return Array.isArray(tenants) ? tenants.map(mapTenant) : [];
   },
 
   // POST /api/v1/admin/tenants
-  createTenant: async (payload: {
-    name: string;
-    email: string;
-    password: string;
-  }) => {
-    const response = await api.post('/admin/tenants', payload);
-    const raw = response.data?.data?.tenant ?? response.data?.data;
+  createTenant: async (payload: CreateTenantPayload): Promise<Tenant> => {
+    const response = await api.post<ApiEnvelope<TenantDetailPayload | RawTenant>>(
+      '/admin/tenants',
+      payload
+    );
+    const data = response.data.data;
+    const raw = (data as TenantDetailPayload)?.tenant ?? (data as RawTenant);
     return mapTenant(raw);
   },
 
   // GET /api/v1/admin/tenants/:id
   getById: async (id: string): Promise<Tenant> => {
-    const response = await api.get(`/admin/tenants/${id}`);
-    const raw = response.data?.data?.tenant ?? response.data?.data;
+    const response = await api.get<ApiEnvelope<TenantDetailPayload | RawTenant>>(
+      `/admin/tenants/${id}`
+    );
+    const data = response.data.data;
+    const raw = (data as TenantDetailPayload)?.tenant ?? (data as RawTenant);
     return mapTenant(raw);
   },
 
   // PATCH /api/v1/admin/tenants/:id
-  toggleTenantActive: async (id: string, isActive: boolean) => {
-    const response = await api.patch(`/admin/tenants/${id}`, {
-      is_active: isActive,
-      status: isActive ? 'ACTIVE' : 'SUSPENDED',
-    });
-    const raw = response.data?.data?.tenant ?? response.data?.data;
+  toggleTenantActive: async (id: string, isActive: boolean): Promise<Tenant> => {
+    const response = await api.patch<ApiEnvelope<TenantDetailPayload | RawTenant>>(
+      `/admin/tenants/${id}`,
+      {
+        is_active: isActive,
+        status: isActive ? 'ACTIVE' : 'SUSPENDED',
+      }
+    );
+    const data = response.data.data;
+    const raw = (data as TenantDetailPayload)?.tenant ?? (data as RawTenant);
     return mapTenant(raw);
   },
 
   // GET /api/v1/users (Global Users list)
-  getUsers: async (): Promise<{ data: User[] }> => {
-    const response = await api.get('/users', { params: { limit: 100 } });
-    const payload = response.data?.data ?? response.data;
+  getUsers: async (tenantId?: string): Promise<{ data: User[] }> => {
+    const response = await api.get<ApiEnvelope<RawUser[]> | RawUser[]>(
+      '/users',
+      { params: { limit: 100, ...(tenantId && { tenant_id: tenantId }) } }
+    );
+    const payload = (response.data as ApiEnvelope<RawUser[]>)?.data ?? response.data;
     const list = Array.isArray(payload) ? payload : [];
     return { data: list.map(mapUser) };
   },

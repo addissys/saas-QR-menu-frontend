@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { adminApi } from '../../api/admin.api';
 import { Tenant } from '../../types';
 import { useToast } from '../../hooks/useToast';
@@ -161,7 +162,7 @@ export const AdminRestaurantsPage: React.FC = () => {
                 header: 'Restaurant Name',
 
                 accessor: (tenant: Tenant) => (
-                  <div className="flex items-center gap-3">
+                  <Link to={`/admin/restaurants/${tenant.id}`} className="flex items-center gap-3 hover:opacity-80">
 
                     <img
                       src={
@@ -182,7 +183,7 @@ export const AdminRestaurantsPage: React.FC = () => {
                       </span>
                     </div>
 
-                  </div>
+                  </Link>
                 ),
               },
 
@@ -219,21 +220,12 @@ export const AdminRestaurantsPage: React.FC = () => {
                 header: 'Actions',
 
                 accessor: (tenant: Tenant) => (
-                  <Button
-                    variant={
-                      tenant.isActive
-                        ? 'outline'
-                        : 'primary'
-                    }
-                    size="sm"
-                    onClick={() =>
-                      setToggleId(tenant.id)
-                    }
-                  >
-                    {tenant.isActive
-                      ? 'Suspend Tenant'
-                      : 'Activate Tenant'}
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link to={`/admin/restaurants/${tenant.id}`} className="text-xs font-semibold text-purple-700 hover:text-purple-900">View Details</Link>
+                    <Button variant={tenant.isActive ? 'outline' : 'primary'} size="sm" onClick={() => setToggleId(tenant.id)}>
+                      {tenant.isActive ? 'Suspend Tenant' : 'Activate Tenant'}
+                    </Button>
+                  </div>
                 ),
               },
             ]}

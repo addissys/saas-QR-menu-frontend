@@ -134,6 +134,15 @@ export interface AuditLog {
   details?: string;
   ipAddress?: string;
   createdAt: string;
+  userRole?: string;
+  branchId?: string;
+  method?: string;
+  endpoint?: string;
+  statusCode?: number;
+  requestBody?: unknown;
+  responseBody?: unknown;
+  success?: boolean;
+  errorMessage?: string;
 }
 
 export type AuditLogItem = AuditLog;
