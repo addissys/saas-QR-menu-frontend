@@ -17,6 +17,7 @@ export const BranchesListPage: React.FC = () => {
   const { showToast } = useToast();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const isBranchManager = user?.role === 'BRANCH_MANAGER';
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -182,8 +183,9 @@ export const BranchesListPage: React.FC = () => {
   ];
 
   // Role-based filtering: Executive and Branch Managers only see their assigned branches
-  const displayBranches =
-    user?.assignedBranchIds && user.assignedBranchIds.length > 0
+  const displayBranches = isBranchManager
+    ? branches.filter((b) => user?.assignedBranchIds?.includes(b.id))
+    : user?.assignedBranchIds && user.assignedBranchIds.length > 0
       ? branches.filter((b) => user.assignedBranchIds?.includes(b.id))
       : branches;
 
@@ -215,7 +217,7 @@ export const BranchesListPage: React.FC = () => {
           <div className="text-xs">
             <p className="font-bold">Single-Branch Manager Scope</p>
             <p className="text-sky-800">
-              Showing operations for your assigned venue ({displayBranches[0]?.name || 'Current Branch'}).
+              Showing operations for your assigned venue ({displayBranches[0]?.name || 'No branch assigned'}).
             </p>
           </div>
         </motion.div>
@@ -255,7 +257,7 @@ export const BranchesListPage: React.FC = () => {
         {isLoading ? (
           <div className="p-8 text-center text-xs text-slate-400">Loading branch locations...</div>
         ) : (
-          <Table columns={columns} data={displayBranches} emptyMessage="No branch locations configured for your account scope" />
+          <Table columns={columns} data={displayBranches} emptyMessage={isBranchManager ? 'No branch is currently assigned to your account. Please contact your administrator.' : 'No branch locations configured for your account scope'} />
         )}
       </motion.div>
 

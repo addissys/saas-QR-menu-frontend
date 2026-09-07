@@ -11,8 +11,10 @@ import { Modal } from '../../components/ui/Modal';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { Pagination } from '../../components/ui/Pagination';
 import { Briefcase, Plus, Edit2, Trash2, Mail, Phone, GitBranch, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { normalizeRole } from '../../utils/roles';
+import { getUserFormErrors, UserFormErrors } from '../../utils/formErrors';
 
 export const ExecutivesListPage: React.FC = () => {
   const { user } = useAuth();
@@ -23,6 +25,10 @@ export const ExecutivesListPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -35,6 +41,8 @@ export const ExecutivesListPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [formErrors, setFormErrors] = useState<UserFormErrors>({});
   const [assignedBranchIds, setAssignedBranchIds] = useState<string[]>([]);
 
   const normalizedRole = normalizeRole(user?.role);
@@ -72,6 +80,8 @@ export const ExecutivesListPage: React.FC = () => {
     setEmail('');
     setPhone('');
     setPassword('');
+    setConfirmPassword('');
+    setFormErrors({});
     setAssignedBranchIds(branches.map((b) => b.id)); // Default select all branches
     setIsCreateOpen(true);
   };
@@ -99,15 +109,24 @@ export const ExecutivesListPage: React.FC = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !email.trim()) {
-      showToast('Name and email are required', 'error');
+      setFormErrors({ form: 'Name and email are required.' });
       return;
     }
     if (!password || password.length < 8) {
-      showToast('Password must be at least 8 characters', 'error');
+      setFormErrors({ password: 'Password must be at least 8 characters.' });
+      return;
+    }
+    if (!confirmPassword) {
+      setFormErrors({ confirmPassword: 'Please confirm your password.' });
+      return;
+    }
+    if (password !== confirmPassword) {
+      setFormErrors({ confirmPassword: 'Passwords do not match.' });
       return;
     }
 
     setIsSubmitting(true);
+    setFormErrors({});
     try {
       await userApi.createExecutive({
         fullName,
@@ -121,8 +140,7 @@ export const ExecutivesListPage: React.FC = () => {
       setIsCreateOpen(false);
       await loadData();
     } catch (err: any) {
-      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to create executive';
-      showToast(msg, 'error');
+      setFormErrors(getUserFormErrors(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -223,9 +241,17 @@ export const ExecutivesListPage: React.FC = () => {
           actionText={canManageExecutives ? '+ Add Executive' : undefined}
           onAction={openCreateModal}
         />
-      ) : (
+      ) : (() => {
+        const totalPages = Math.max(1, Math.ceil(executives.length / rowsPerPage));
+        const safePage = Math.min(currentPage, totalPages);
+        const paginatedExecutives = executives.slice(
+          (safePage - 1) * rowsPerPage,
+          safePage * rowsPerPage
+        );
+        return (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {executives.map((exec) => {
+          {paginatedExecutives.map((exec) => {
             const assignedBranchesList = branches.filter((b) =>
               exec.assignedBranchIds?.includes(b.id)
             );
@@ -321,7 +347,21 @@ export const ExecutivesListPage: React.FC = () => {
             );
           })}
         </div>
-      )}
+
+        {/* Pagination */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden">
+          <Pagination
+            currentPage={safePage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalRecords={executives.length}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(size) => { setRowsPerPage(size); setCurrentPage(1); }}
+          />
+        </div>
+        </>
+        );
+      })()}
 
       {/* Create Executive Modal */}
       <Modal
@@ -331,11 +371,13 @@ export const ExecutivesListPage: React.FC = () => {
         maxWidth="md"
       >
         <form onSubmit={handleCreate} className="space-y-4">
+          {formErrors.form && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-700">{formErrors.form}</p>}
           <Input
             label="Full Name *"
             placeholder="e.g. Dawit Alemayehu"
             value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
+            onChange={(e) => { setFullName(e.target.value); setFormErrors((current) => ({ ...current, fullName: undefined, form: undefined })); }}
+            error={formErrors.fullName}
             required
           />
 
@@ -344,7 +386,8 @@ export const ExecutivesListPage: React.FC = () => {
             type="email"
             placeholder="e.g. executive@restaurant.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => { setEmail(e.target.value); setFormErrors((current) => ({ ...current, email: undefined, form: undefined })); }}
+            error={formErrors.email}
             required
           />
 
@@ -352,15 +395,29 @@ export const ExecutivesListPage: React.FC = () => {
             label="Phone Number"
             placeholder="+251 91 234 5678"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => { setPhone(e.target.value); setFormErrors((current) => ({ ...current, phone: undefined, form: undefined })); }}
+            error={formErrors.phone}
           />
 
           <Input
             label="Password *"
             type="password"
+            showPasswordToggle
             placeholder="Min. 8 characters"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => { setPassword(e.target.value); setFormErrors((current) => ({ ...current, password: undefined, form: undefined })); }}
+            error={formErrors.password}
+            required
+          />
+
+          <Input
+            label="Confirm Password *"
+            type="password"
+            placeholder="Repeat password"
+            showPasswordToggle
+            value={confirmPassword}
+            onChange={(e) => { setConfirmPassword(e.target.value); setFormErrors((current) => ({ ...current, confirmPassword: undefined, form: undefined })); }}
+            error={formErrors.confirmPassword}
             required
           />
 

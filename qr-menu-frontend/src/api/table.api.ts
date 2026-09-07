@@ -77,13 +77,13 @@ const unwrapTable = (
 // ---------------------------------------------------------------------------
 
 export const tableApi = {
-  getAll: async (branchId?: string): Promise<{ data: Table[] }> => {
+  getAll: async (branchId?: string, tenantId?: string): Promise<{ data: Table[] }> => {
     const user = useAuthStore.getState().user;
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
-    if (branchId) {
+    if (branchId || tenantId) {
       const response = await api.get<ApiEnvelope<TableListPayload | RawTable[]>>('/tables', {
-        params: { branch_id: branchId },
+        params: { ...(branchId && { branch_id: branchId }), ...(tenantId && { tenant_id: tenantId }) },
       });
       return { data: unwrapTables(response) };
     }

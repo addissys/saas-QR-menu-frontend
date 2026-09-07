@@ -86,8 +86,10 @@ const mapQr = (payload: RawQrResponse): QRCodeConfig => {
 // ---------------------------------------------------------------------------
 
 export const qrApi = {
-  getAll: async (): Promise<{ data: QRCodeConfig[] }> => {
-    const response = await api.get<ApiEnvelope<RawQrResponse[]> | RawQrResponse[]>('/qr-codes');
+  getAll: async (tenantId?: string): Promise<{ data: QRCodeConfig[] }> => {
+    const response = await api.get<ApiEnvelope<RawQrResponse[]> | RawQrResponse[]>('/qr-codes', {
+      params: tenantId ? { tenant_id: tenantId } : undefined,
+    });
     const payload = (response.data as ApiEnvelope<RawQrResponse[]>).data ?? response.data;
     const list = payload as RawQrResponse[];
     return { data: Array.isArray(list) ? list.map(mapQr) : [] };

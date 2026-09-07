@@ -11,12 +11,9 @@ import {
   UtensilsCrossed,
   Bell,
   FileSpreadsheet,
-  User,
   ShieldAlert,
   LogOut,
   Sparkles,
-  Briefcase,
-  UserCheck,
   Users,
 } from 'lucide-react';
 
@@ -33,11 +30,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isAdmin = false, onCloseMobile
       return [
         { name: 'Admin Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
         { name: 'Tenants Directory', path: '/admin/restaurants', icon: Store },
-        { name: 'Global Users', path: '/admin/users', icon: User },
-        { name: 'Global Branches', path: '/admin/branches', icon: GitBranch },
-        { name: 'Global Menu Items', path: '/admin/menu-items', icon: UtensilsCrossed },
         { name: 'Global Search', path: '/admin/search', icon: Sparkles },
-        { name: 'Global Audit Logs', path: '/admin/audit-logs', icon: ShieldAlert },
+        { name: 'Audit Logs', path: '/admin/audit-logs', icon: ShieldAlert },
       ];
     }
 
@@ -52,7 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isAdmin = false, onCloseMobile
       return [
         { name: 'Branch Operations', path: '/dashboard', icon: LayoutDashboard },
         { name: 'Branch Info', path: '/branches', icon: GitBranch },
-        { name: 'Staff Management', path: '/staff-members', icon: Users },
+        { name: 'User Management', path: '/staff-members', icon: Users },
         { name: 'Branch Tables', path: '/tables', icon: TableIcon },
         { name: 'QR Codes Generator', path: '/qr-codes', icon: QrCode },
         { name: 'Menu Categories', path: '/categories', icon: FolderTree },
@@ -65,8 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isAdmin = false, onCloseMobile
       return [
         { name: 'Executive Overview', path: '/dashboard', icon: LayoutDashboard },
         { name: 'Assigned Branches', path: '/branches', icon: GitBranch },
-        { name: 'Branch Managers', path: '/branch-managers', icon: UserCheck },
-        { name: 'Staff Management', path: '/staff-members', icon: Users },
+        { name: 'User Management', path: '/staff-members', icon: Users },
         { name: 'Tables Management', path: '/tables', icon: TableIcon },
         { name: 'QR Codes Generator', path: '/qr-codes', icon: QrCode },
         { name: 'Menu Categories', path: '/categories', icon: FolderTree },
@@ -80,9 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isAdmin = false, onCloseMobile
       { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
       { name: 'Restaurant Info', path: '/restaurants', icon: Store },
       { name: 'Branches', path: '/branches', icon: GitBranch },
-      { name: 'Executives', path: '/executives', icon: Briefcase },
-      { name: 'Branch Managers', path: '/branch-managers', icon: UserCheck },
-      { name: 'Staff Members', path: '/staff-members', icon: Users },
+      { name: 'User Management', path: '/staff-members', icon: Users },
       { name: 'Tables Management', path: '/tables', icon: TableIcon },
       { name: 'QR Codes Generator', path: '/qr-codes', icon: QrCode },
       { name: 'Menu Categories', path: '/categories', icon: FolderTree },

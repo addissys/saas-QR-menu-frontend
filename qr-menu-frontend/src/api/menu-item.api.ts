@@ -111,14 +111,15 @@ type CreateMenuItemPayload = Partial<MenuItem> & {
 // ---------------------------------------------------------------------------
 
 export const menuItemApi = {
-  getAll: async (branchId?: string, categoryId?: string): Promise<{ data: MenuItem[] }> => {
+  getAll: async (branchId?: string, categoryId?: string, requestedTenantId?: string): Promise<{ data: MenuItem[] }> => {
     const user = useAuthStore.getState().user;
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-    const tenantId = user?.tenantId;
+    const tenantId = requestedTenantId ?? user?.tenantId;
 
     const params: Record<string, string> = {};
     if (branchId) params.branch_id = branchId;
     if (categoryId) params.category_id = categoryId;
+    if (tenantId) params.tenant_id = tenantId;
 
     const response = await api.get<ApiEnvelope<MenuItemListPayload | RawMenuItem[]>>(
       '/menu-items',

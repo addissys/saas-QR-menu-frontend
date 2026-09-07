@@ -12,8 +12,10 @@ import { Modal } from '../../components/ui/Modal';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { Badge } from '../../components/ui/Badge';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { Pagination } from '../../components/ui/Pagination';
 import { Users, Plus, Edit2, Trash2, Mail, Phone, GitBranch, UtensilsCrossed, Store } from 'lucide-react';
 import { normalizeRole } from '../../utils/roles';
+import { getUserFormErrors, UserFormErrors } from '../../utils/formErrors';
 
 export const StaffListPage: React.FC = () => {
   const { user } = useAuth();
@@ -26,6 +28,10 @@ export const StaffListPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
   // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -37,6 +43,8 @@ export const StaffListPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [formErrors, setFormErrors] = useState<UserFormErrors>({});
   const [assignedBranchId, setAssignedBranchId] = useState('');
 
   const normalizedRole = normalizeRole(user?.role);
@@ -79,6 +87,7 @@ export const StaffListPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    setCurrentPage(1);
   }, [branchFilter]);
 
   const openCreateModal = () => {
@@ -86,6 +95,8 @@ export const StaffListPage: React.FC = () => {
     setEmail('');
     setPhone('');
     setPassword('');
+    setConfirmPassword('');
+    setFormErrors({});
     const initialBranchId =
       branchFilter !== 'all' && allowedBranches.some((b) => b.id === branchFilter)
         ? branchFilter
@@ -111,15 +122,24 @@ export const StaffListPage: React.FC = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !email.trim() || !assignedBranchId) {
-      showToast('Please fill all required fields and select a branch', 'error');
+      setFormErrors({ form: 'Please fill all required fields and select a branch.' });
       return;
     }
     if (!password || password.length < 8) {
-      showToast('Password must be at least 8 characters', 'error');
+      setFormErrors({ password: 'Password must be at least 8 characters.' });
+      return;
+    }
+    if (!confirmPassword) {
+      setFormErrors({ confirmPassword: 'Please confirm your password.' });
+      return;
+    }
+    if (password !== confirmPassword) {
+      setFormErrors({ confirmPassword: 'Passwords do not match.' });
       return;
     }
 
     setIsSubmitting(true);
+    setFormErrors({});
     try {
       await userApi.createStaff({
         fullName,
@@ -133,8 +153,7 @@ export const StaffListPage: React.FC = () => {
       setIsCreateOpen(false);
       await loadData();
     } catch (err: any) {
-      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to create staff member';
-      showToast(msg, 'error');
+      setFormErrors(getUserFormErrors(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -254,6 +273,13 @@ export const StaffListPage: React.FC = () => {
           );
         });
 
+        const totalPages = Math.max(1, Math.ceil(filteredStaff.length / rowsPerPage));
+        const safePage = Math.min(currentPage, totalPages);
+        const paginatedStaff = filteredStaff.slice(
+          (safePage - 1) * rowsPerPage,
+          safePage * rowsPerPage
+        );
+
         if (isLoading) {
           return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -281,8 +307,9 @@ export const StaffListPage: React.FC = () => {
         }
 
         return (
+          <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredStaff.map((staff) => {
+            {paginatedStaff.map((staff) => {
               const assignedBranch = branches.find(
                 (b) => staff.assignedBranchIds?.includes(b.id) || b.id === staff.branchId
               );
@@ -371,6 +398,19 @@ export const StaffListPage: React.FC = () => {
             );
           })}
         </div>
+
+          {/* Pagination */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden">
+            <Pagination
+              currentPage={safePage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              totalRecords={filteredStaff.length}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={(size) => { setRowsPerPage(size); setCurrentPage(1); }}
+            />
+          </div>
+          </>
       );
     })()}
 
@@ -382,11 +422,13 @@ export const StaffListPage: React.FC = () => {
         maxWidth="md"
       >
         <form onSubmit={handleCreate} className="space-y-4">
+          {formErrors.form && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-700">{formErrors.form}</p>}
           <Input
             label="Full Name *"
             placeholder="e.g. Yohannes Bekele"
             value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
+            onChange={(e) => { setFullName(e.target.value); setFormErrors((current) => ({ ...current, fullName: undefined, form: undefined })); }}
+            error={formErrors.fullName}
             required
           />
 
@@ -395,7 +437,8 @@ export const StaffListPage: React.FC = () => {
             type="email"
             placeholder="e.g. staff@restaurant.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => { setEmail(e.target.value); setFormErrors((current) => ({ ...current, email: undefined, form: undefined })); }}
+            error={formErrors.email}
             required
           />
 
@@ -403,15 +446,29 @@ export const StaffListPage: React.FC = () => {
             label="Phone Number"
             placeholder="+251 91 456 7890"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => { setPhone(e.target.value); setFormErrors((current) => ({ ...current, phone: undefined, form: undefined })); }}
+            error={formErrors.phone}
           />
 
           <Input
             label="Password *"
             type="password"
+            showPasswordToggle
             placeholder="Min. 8 characters"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => { setPassword(e.target.value); setFormErrors((current) => ({ ...current, password: undefined, form: undefined })); }}
+            error={formErrors.password}
+            required
+          />
+
+          <Input
+            label="Confirm Password *"
+            type="password"
+            placeholder="Repeat password"
+            showPasswordToggle
+            value={confirmPassword}
+            onChange={(e) => { setConfirmPassword(e.target.value); setFormErrors((current) => ({ ...current, confirmPassword: undefined, form: undefined })); }}
+            error={formErrors.confirmPassword}
             required
           />
 

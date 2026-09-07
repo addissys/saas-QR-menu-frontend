@@ -77,9 +77,16 @@ interface DashboardPayload {
   statistics?: DashboardStatistics;
 }
 
-/** Shape unknown — backend contract for /admin/dashboard not yet confirmed. */
+interface DashboardMetric {
+  total: number;
+  active?: number;
+}
+
 interface DashboardStatistics {
-  [key: string]: unknown;
+  tenants?: DashboardMetric;
+  users?: DashboardMetric;
+  branches?: DashboardMetric;
+  menuItems?: DashboardMetric;
 }
 
 interface SearchResultsPayload {
@@ -237,10 +244,10 @@ export const adminApi = {
   },
 
   // GET /api/v1/users (Global Users list)
-  getUsers: async (): Promise<{ data: User[] }> => {
+  getUsers: async (tenantId?: string): Promise<{ data: User[] }> => {
     const response = await api.get<ApiEnvelope<RawUser[]> | RawUser[]>(
       '/users',
-      { params: { limit: 100 } }
+      { params: { limit: 100, ...(tenantId && { tenant_id: tenantId }) } }
     );
     const payload = (response.data as ApiEnvelope<RawUser[]>)?.data ?? response.data;
     const list = Array.isArray(payload) ? payload : [];

@@ -2,18 +2,30 @@ import React, { useEffect, useState } from 'react';
 import { auditLogApi } from '../../api/audit-log.api';
 import { AuditLog } from '../../types';
 import { Table, Column } from '../../components/ui/Table';
-import { ShieldAlert, Clock, User } from 'lucide-react';
+import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Modal } from '../../components/ui/Modal';
+import { Clock, User } from 'lucide-react';
 
 export const AdminAuditLogsPage: React.FC = () => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [method, setMethod] = useState('');
+  const [success, setSuccess] = useState('');
+  const [search, setSearch] = useState('');
+  const [role, setRole] = useState('');
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
   useEffect(() => {
-    auditLogApi
-      .getAllGlobal()
-      .then((res) => setLogs(res.data))
+    setIsLoading(true);
+    auditLogApi.getAllGlobal({ page, limit: 20, method: method || undefined, user_role: role || undefined, success: success || undefined, search: search || undefined })
+      .then((res) => { setLogs(res.data); setTotalPages(res.pagination?.totalPages ?? 1); })
+      .catch(() => setLogs([]))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [page, method, role, success, search]);
 
   const columns: Column<AuditLog>[] = [
     {
@@ -26,11 +38,19 @@ export const AdminAuditLogsPage: React.FC = () => {
       ),
     },
     {
-      header: 'Tenant ID',
-      accessor: (l) => <span className="font-mono text-xs text-purple-600 font-bold">{l.tenantId}</span>,
+      header: 'Method',
+      accessor: (l) => <span className="font-mono text-xs font-bold text-purple-700">{l.method || '-'}</span>,
     },
     {
-      header: 'Event Action',
+      header: 'Endpoint',
+      accessor: (l) => <span className="font-mono text-[11px] text-slate-700">{l.endpoint || l.entityName || '-'}</span>,
+    },
+    {
+      header: 'Status',
+      accessor: (l) => <Badge variant={l.success === false ? 'neutral' : 'success'} size="sm">{l.statusCode || '-'} {l.success === false ? 'FAILED' : 'SUCCESS'}</Badge>,
+    },
+    {
+      header: 'Action',
       accessor: (l) => <span className="font-bold text-slate-900 text-xs uppercase">{l.action}</span>,
     },
     {
@@ -43,8 +63,8 @@ export const AdminAuditLogsPage: React.FC = () => {
       ),
     },
     {
-      header: 'Details',
-      accessor: (l) => <span className="text-xs text-slate-600">{l.details}</span>,
+      header: 'Role',
+      accessor: (l) => <span className="text-xs text-slate-600">{l.userRole || '-'}</span>,
     },
   ];
 
@@ -55,13 +75,22 @@ export const AdminAuditLogsPage: React.FC = () => {
         <p className="text-xs text-slate-500">Super admin master audit log stream of all platform actions</p>
       </div>
 
+      <div className="flex flex-wrap gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+        <Input placeholder="Search endpoint, action, user..." value={search} onChange={(event) => { setPage(1); setSearch(event.target.value); }} />
+        <select className="rounded-xl border border-slate-200 px-3 text-xs" value={method} onChange={(event) => { setPage(1); setMethod(event.target.value); }}><option value="">All methods</option><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
+        <select className="rounded-xl border border-slate-200 px-3 text-xs" value={role} onChange={(event) => { setPage(1); setRole(event.target.value); }}><option value="">All roles</option><option>SUPER_ADMIN</option><option>CAFE_OWNER</option><option>EXECUTIVE</option><option>BRANCH_MANAGER</option><option>STAFF</option></select>
+        <select className="rounded-xl border border-slate-200 px-3 text-xs" value={success} onChange={(event) => { setPage(1); setSuccess(event.target.value); }}><option value="">All results</option><option value="true">Success</option><option value="false">Failed</option></select>
+      </div>
+
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center text-xs text-slate-400">Loading master audit logs...</div>
         ) : (
-          <Table columns={columns} data={logs} emptyMessage="No master audit records" />
+          <div onClick={(event) => { const row = (event.target as HTMLElement).closest('tr'); const index = row ? Array.from(row.parentElement?.children ?? []).indexOf(row) : -1; if (index >= 0 && logs[index]) void auditLogApi.getById(logs[index].id).then(setSelectedLog); }}><Table columns={columns} data={logs} emptyMessage="No master audit records" /></div>
         )}
       </div>
+      <div className="flex items-center justify-between text-xs text-slate-500"><span>Page {page} of {totalPages}</span><div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</Button><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Next</Button></div></div>
+      <Modal isOpen={!!selectedLog} onClose={() => setSelectedLog(null)} title="Request Details" maxWidth="xl">{selectedLog && <div className="space-y-4 text-xs"><div className="grid gap-3 sm:grid-cols-3"><div><b>Method</b><p>{selectedLog.method || '-'}</p></div><div><b>Status</b><p>{selectedLog.statusCode || '-'}</p></div><div><b>Result</b><p>{selectedLog.success === false ? 'FAILED' : 'SUCCESS'}</p></div></div><div><b>Endpoint</b><pre className="mt-1 overflow-auto rounded-xl bg-slate-50 p-3">{selectedLog.endpoint || '-'}</pre></div><div className="grid gap-4 sm:grid-cols-2"><div><b>Request Body</b><pre className="mt-1 max-h-64 overflow-auto rounded-xl bg-slate-50 p-3">{JSON.stringify(selectedLog.requestBody ?? {}, null, 2)}</pre></div><div><b>Response Body</b><pre className="mt-1 max-h-64 overflow-auto rounded-xl bg-slate-50 p-3">{JSON.stringify(selectedLog.responseBody ?? {}, null, 2)}</pre></div></div><p><b>Error:</b> {selectedLog.errorMessage || 'None'}</p></div>}</Modal>
     </div>
   );
 };

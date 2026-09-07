@@ -24,6 +24,7 @@ export const LoginPage: React.FC = () => {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [serverError, setServerError] = useState('');
 
   const {
     register,
@@ -35,6 +36,7 @@ export const LoginPage: React.FC = () => {
 
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
+    setServerError('');
     try {
       await login(data.email, data.password);
       showToast('Welcome back! Signed in successfully.', 'success');
@@ -49,7 +51,7 @@ export const LoginPage: React.FC = () => {
       if (axios.isAxiosError(err)) {
         msg = err.response?.data?.message || msg;
       }
-      showToast(msg, 'error');
+      setServerError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -95,6 +97,11 @@ export const LoginPage: React.FC = () => {
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {serverError && (
+            <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-700">
+              {serverError}
+            </p>
+          )}
           <div>
             <Input
               label="Email Address"
@@ -112,6 +119,7 @@ export const LoginPage: React.FC = () => {
             <Input
               label="Password"
               type="password"
+              showPasswordToggle
               icon={Lock}
               placeholder="Your password"
               {...register('password')}

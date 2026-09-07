@@ -92,13 +92,13 @@ const unwrapBranch = (
 // ---------------------------------------------------------------------------
 
 export const branchApi = {
-  getAll: async (): Promise<{ data: Branch[] }> => {
+  getAll: async (requestedTenantId?: string): Promise<{ data: Branch[] }> => {
     const user = useAuthStore.getState().user;
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-    const tenantId = user?.tenantId;
+    const tenantId = requestedTenantId ?? user?.tenantId;
 
     const params: Record<string, string> = {};
-    if (tenantId && !isSuperAdmin) {
+    if (tenantId) {
       params.tenant_id = tenantId;
     }
 
@@ -108,7 +108,7 @@ export const branchApi = {
     );
     const all = unwrapBranches(response);
 
-    if (tenantId && !isSuperAdmin) {
+    if (tenantId) {
       return { data: all.filter((b) => b.tenantId === tenantId) };
     }
 
