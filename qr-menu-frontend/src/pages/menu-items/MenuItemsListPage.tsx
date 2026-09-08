@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { menuItemApi } from '../../api/menu-item.api';
 import { categoryApi } from '../../api/category.api';
-import { MenuItem, Category } from '../../types';
+import { branchApi } from '../../api/branch.api';
+import { MenuItem, Category, Branch } from '../../types';
 import { useToast } from '../../hooks/useToast';
 import { useAuth } from '../../hooks/useAuth';
 import { MenuGrid } from '../../components/menu/MenuGrid';
@@ -13,6 +14,7 @@ import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { Plus, Search, UtensilsCrossed, Star, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { normalizeRole } from '../../utils/roles';
 
 export const MenuItemsListPage: React.FC = () => {
   const { user } = useAuth();
@@ -20,11 +22,15 @@ export const MenuItemsListPage: React.FC = () => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
   const isStaff = user?.role === 'STAFF';
   const canManage = !isStaff;
+  const isCafeOwner = ['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'SUPER_ADMIN']
+    .includes(normalizeRole(user?.role));
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -58,6 +64,14 @@ export const MenuItemsListPage: React.FC = () => {
   useEffect(() => {
     fetchItemsAndCategories();
   }, []);
+
+  useEffect(() => {
+    if (!isCafeOwner) return;
+
+    branchApi.getAll()
+      .then((response) => setBranches(response.data))
+      .catch(() => showToast('Failed to load branches', 'error'));
+  }, [isCafeOwner, showToast]);
 
   const handleOpenCreate = () => {
     setEditingItem(null);
@@ -154,12 +168,16 @@ export const MenuItemsListPage: React.FC = () => {
   };
 
   const filteredItems = menuItems.filter((item) => {
+    const matchesBranch = selectedBranchId === 'all' || item.branchId === selectedBranchId;
     const matchesCategory = selectedCategoryId ? item.categoryId === selectedCategoryId : true;
     const matchesSearch =
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    return matchesBranch && matchesCategory && matchesSearch;
   });
+  const visibleCategories = selectedBranchId === 'all'
+    ? categories
+    : categories.filter((category) => category.branchId === selectedBranchId);
 
   return (
     <div className="space-y-6">
@@ -192,6 +210,29 @@ export const MenuItemsListPage: React.FC = () => {
       </div>
 
       <div className="space-y-4">
+        {isCafeOwner && branches.length > 0 && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <label htmlFor="menu-branch-view" className="text-xs font-bold text-slate-700">
+                View Menu Items by Branch
+              </label>
+              <div className="w-full sm:w-72">
+                <Select
+                  value={selectedBranchId}
+                  onChange={(event) => {
+                    setSelectedBranchId(event.target.value);
+                    setSelectedCategoryId('');
+                  }}
+                  options={[
+                    { value: 'all', label: 'All branches' },
+                    ...branches.map((branch) => ({ value: branch.id, label: branch.name })),
+                  ]}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         <Input
           placeholder="Filter catalog by dish name or description..."
           icon={Search}
@@ -200,7 +241,7 @@ export const MenuItemsListPage: React.FC = () => {
         />
 
         <CategoryTabs
-          categories={categories}
+          categories={visibleCategories}
           selectedCategoryId={selectedCategoryId}
           onSelectCategory={setSelectedCategoryId}
         />

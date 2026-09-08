@@ -29,7 +29,7 @@ const CategoriesListPage: React.FC = () => {
   const userBranchId = user?.branch_id || user?.branchId || user?.assignedBranchIds?.[0];
 
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -39,9 +39,6 @@ const CategoriesListPage: React.FC = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [displayOrder, setDisplayOrder] = useState('0');
-  // Branch for the create form (allows Cafe Owners to pick a branch)
-  const [formBranchId, setFormBranchId] = useState<string>('');
-
   // Delete State
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -50,29 +47,34 @@ const CategoriesListPage: React.FC = () => {
     if (isCafeOwner) {
       branchApi.getAll().then((res) => {
         setBranches(res.data);
-        if (res.data.length > 0 && !selectedBranchId) {
-          setSelectedBranchId(res.data[0].id);
-        }
+        setSelectedBranchIds((current) => current.length > 0 || res.data.length === 0
+          ? current
+          : res.data.map((branch) => branch.id));
       }).catch(() => {});
     } else if (userBranchId) {
-      setSelectedBranchId(userBranchId);
+      setSelectedBranchIds([userBranchId]);
     }
   }, [isCafeOwner, userBranchId]);
 
-  const activeBranchId = isCafeOwner ? selectedBranchId : (userBranchId || selectedBranchId);
+  const activeBranchId = selectedBranchIds[0] || userBranchId || '';
+  const visibleCategories = categories.filter((category, index, allCategories) => {
+    const categoryName = category.name.trim().toLowerCase();
+    return allCategories.findIndex(
+      (candidate) => candidate.name.trim().toLowerCase() === categoryName
+    ) === index;
+  });
 
   const fetchCategories = useCallback(() => {
-    if (!activeBranchId) {
+    if (selectedBranchIds.length === 0) {
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
-    categoryApi
-      .getAll(activeBranchId)
-      .then((data) => setCategories(data))
+    Promise.all(selectedBranchIds.map((branchId) => categoryApi.getAll(branchId)))
+      .then((branchCategories) => setCategories(branchCategories.flat()))
       .catch(() => showToast('Failed to load categories', 'error'))
       .finally(() => setIsLoading(false));
-  }, [activeBranchId, showToast]);
+  }, [selectedBranchIds, showToast]);
 
   useEffect(() => {
     fetchCategories();
@@ -83,7 +85,6 @@ const CategoriesListPage: React.FC = () => {
     setName('');
     setDisplayOrder('0');
     setDescription('');
-    setFormBranchId(activeBranchId || branches[0]?.id || '');
     setIsModalOpen(true);
   };
 
@@ -92,17 +93,16 @@ const CategoriesListPage: React.FC = () => {
     setName(category.name);
     setDisplayOrder(category.sort_order?.toString() || category.displayOrder?.toString() || '0');
     setDescription(category.description || '');
-    setFormBranchId(activeBranchId || '');
     setIsModalOpen(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const branchIdToUse = formBranchId || activeBranchId;
+    const branchIdsToUse = selectedBranchIds;
 
-    if (!editingCategory && !branchIdToUse) {
-      showToast('Please select a branch to create this category in', 'error');
+    if (!editingCategory && branchIdsToUse.length === 0) {
+      showToast('Please select at least one branch to create this category in', 'error');
       return;
     }
     if (!name.trim()) {
@@ -119,12 +119,12 @@ const CategoriesListPage: React.FC = () => {
         });
         showToast('Category updated successfully', 'success');
       } else {
-        await categoryApi.create({
-          branch_id: branchIdToUse!,
-          name: name.trim(),
-          description: description.trim() || undefined,
-          sort_order: parseInt(displayOrder, 10) || 0,
-        });
+        await Promise.all(branchIdsToUse.map((branchId) => categoryApi.create({
+            branch_id: branchId,
+            name: name.trim(),
+            description: description.trim() || undefined,
+            sort_order: parseInt(displayOrder, 10) || 0,
+          })));
         showToast('Category created successfully', 'success');
       }
       setIsModalOpen(false);
@@ -208,14 +208,32 @@ const CategoriesListPage: React.FC = () => {
 
       {/* Branch selector for Cafe Owners */}
       {isCafeOwner && branches.length > 1 && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
-          <span className="text-xs font-bold text-slate-700 shrink-0">Viewing Branch:</span>
-          <div className="w-64">
-            <Select
-              value={selectedBranchId}
-              onChange={(e) => setSelectedBranchId(e.target.value)}
-              options={branches.map((b) => ({ value: b.id, label: b.name }))}
-            />
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-bold text-slate-700">Viewing Branches:</span>
+            <span className="text-[11px] text-slate-500">
+              {selectedBranchIds.length} selected
+            </span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {branches.map((branch) => (
+              <label
+                key={branch.id}
+                className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedBranchIds.includes(branch.id)}
+                  onChange={(event) => {
+                    setSelectedBranchIds((current) => event.target.checked
+                      ? [...current, branch.id]
+                      : current.filter((id) => id !== branch.id));
+                  }}
+                  className="h-4 w-4 accent-purple-600"
+                />
+                {branch.name}
+              </label>
+            ))}
           </div>
         </div>
       )}
@@ -232,7 +250,7 @@ const CategoriesListPage: React.FC = () => {
         {isLoading ? (
           <div className="p-8 text-center text-xs text-slate-400">Loading menu categories...</div>
         ) : (
-          <Table columns={columns} data={categories} emptyMessage="No categories created" />
+          <Table columns={columns} data={visibleCategories} emptyMessage="No categories created" />
         )}
       </div>
 
@@ -243,15 +261,10 @@ const CategoriesListPage: React.FC = () => {
         maxWidth="sm"
       >
         <form onSubmit={handleSave} className="space-y-4">
-          {/* Branch selector in form — only show for Cafe Owners on create */}
-          {isCafeOwner && !editingCategory && branches.length > 1 && (
-            <Select
-              label="Branch *"
-              value={formBranchId}
-              onChange={(e) => setFormBranchId(e.target.value)}
-              options={branches.map((b) => ({ value: b.id, label: b.name }))}
-              required
-            />
+          {!editingCategory && isCafeOwner && (
+            <p className="rounded-xl bg-purple-50 px-3 py-2 text-xs text-purple-700">
+              This category will be created for {selectedBranchIds.length} selected branch{selectedBranchIds.length === 1 ? '' : 'es'}.
+            </p>
           )}
           <Input
             label="Category Name *"
