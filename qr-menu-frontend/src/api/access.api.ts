@@ -1,5 +1,7 @@
 import api from './axios';
 import { User, UserRole } from '../types';
+import { branchApi } from './branch.api';
+import { useAuthStore } from '../store/useAuthStore';
 
 export interface RoleRecord {
   id: string;
@@ -32,7 +34,22 @@ export const accessApi = {
   getUsers: async (): Promise<User[]> => {
     const response = await api.get('/users');
     const list = Array.isArray(response.data?.data) ? response.data.data : [];
-    return list.map(mapUser);
+    const mapped = list.map(mapUser);
+    const currentUser = useAuthStore.getState().user;
+
+    if (!currentUser || currentUser.role === 'SUPER_ADMIN' || !currentUser.tenantId) {
+      return mapped;
+    }
+
+    const tenantBranches = await branchApi.getAll();
+    const tenantBranchIds = new Set(tenantBranches.data.map((branch) => branch.id));
+
+    return mapped.filter(
+      (user) =>
+        user.tenantId === currentUser.tenantId ||
+        (user.branchId ? tenantBranchIds.has(user.branchId) : false) ||
+        user.assignedBranchIds?.some((branchId) => tenantBranchIds.has(branchId))
+    );
   },
   getRoles: async (): Promise<RoleRecord[]> => {
     const response = await api.get('/roles');

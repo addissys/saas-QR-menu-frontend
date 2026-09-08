@@ -54,9 +54,9 @@ type CreateBranchPayload = Partial<Branch> & {
 // Mapping helpers
 // ---------------------------------------------------------------------------
 
-const mapBranch = (branch: RawBranch): Branch => ({
+const mapBranch = (branch: RawBranch, fallbackTenantId = ''): Branch => ({
   id: branch.id,
-  tenantId: branch.tenant_id ?? branch.tenantId ?? branch.tenant?.id ?? '',
+  tenantId: branch.tenant_id ?? branch.tenantId ?? branch.tenant?.id ?? fallbackTenantId,
   tenantName: branch.tenant?.business_name ?? '',
   name: branch.branch_name ?? branch.name ?? '',
   address: branch.address ?? '',
@@ -68,7 +68,8 @@ const mapBranch = (branch: RawBranch): Branch => ({
 });
 
 const unwrapBranches = (
-  response: AxiosResponse<ApiEnvelope<BranchListPayload | RawBranch[]> | RawBranch[]>
+  response: AxiosResponse<ApiEnvelope<BranchListPayload | RawBranch[]> | RawBranch[]>,
+  fallbackTenantId = ''
 ): Branch[] => {
   const body = response.data as ApiEnvelope<BranchListPayload | RawBranch[]> | RawBranch[];
   const payload = Array.isArray(body) ? body : body?.data ?? body;
@@ -76,7 +77,7 @@ const unwrapBranches = (
     ? payload
     : (payload as BranchListPayload)?.branches;
 
-  return Array.isArray(branches) ? branches.map(mapBranch) : [];
+  return Array.isArray(branches) ? branches.map((branch) => mapBranch(branch, fallbackTenantId)) : [];
 };
 
 const unwrapBranch = (
@@ -106,13 +107,20 @@ export const branchApi = {
       '/branches',
       { params }
     );
-    const all = unwrapBranches(response);
+    const all = unwrapBranches(response, tenantId);
 
-    if (tenantId) {
-      return { data: all.filter((b) => b.tenantId === tenantId) };
+    if (!isSuperAdmin && !tenantId) {
+      return { data: [] };
     }
 
-    return { data: all };
+    const tenantBranches = tenantId ? all.filter((b) => b.tenantId === tenantId) : all;
+    const isScopedUser = user?.role === 'BRANCH_MANAGER' || user?.role === 'EXECUTIVE';
+    if (isScopedUser) {
+      const assignedBranchIds = new Set(user?.assignedBranchIds ?? (user?.branchId ? [user.branchId] : []));
+      return { data: tenantBranches.filter((branch) => assignedBranchIds.has(branch.id)) };
+    }
+
+    return { data: tenantBranches };
   },
 
   getAllGlobal: async (): Promise<{ data: Branch[] }> => {

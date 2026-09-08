@@ -15,6 +15,14 @@ interface RawUser {
   role?: string | { name?: string };
   owned_tenants?: { id: string }[];
   tenantId?: string;
+  tenant_id?: string;
+  branchId?: string;
+  branch_id?: string;
+  assignedBranchIds?: string[];
+  assigned_branch_ids?: string[];
+  branch?: { id?: string; tenant_id?: string };
+  executive_branches?: { id?: string; branch_id?: string; branch?: { id?: string } }[];
+  staff_profile?: { branch_id?: string; branch?: { id?: string; tenant_id?: string } }[];
   is_active?: boolean;
   isActive?: boolean;
   created_at?: string;
@@ -28,7 +36,20 @@ const mapRawUser = (raw: RawUser): User => ({
   phone: raw.phone ?? undefined,
   profileImage: raw.profile_image ?? undefined,
   role: (typeof raw.role === 'object' ? raw.role?.name : raw.role) as UserRole,
-  tenantId: raw.owned_tenants?.[0]?.id ?? raw.tenantId ?? '',
+  tenantId:
+    raw.owned_tenants?.[0]?.id ??
+    raw.tenantId ??
+    raw.tenant_id ??
+    raw.branch?.tenant_id ??
+    raw.staff_profile?.[0]?.branch?.tenant_id ??
+    '',
+  branchId: raw.branchId ?? raw.branch_id ?? raw.branch?.id ?? raw.staff_profile?.[0]?.branch_id,
+  assignedBranchIds:
+    raw.assignedBranchIds ??
+    raw.assigned_branch_ids ??
+    raw.executive_branches?.map((branch) => branch.branch?.id ?? branch.branch_id ?? branch.id).filter((id): id is string => Boolean(id)) ??
+    raw.staff_profile?.map((profile) => profile.branch_id).filter((id): id is string => Boolean(id)) ??
+    (raw.branchId || raw.branch_id || raw.branch?.id ? [raw.branchId ?? raw.branch_id ?? raw.branch?.id!] : []),
   isActive: raw.is_active ?? raw.isActive ?? true,
   createdAt: raw.created_at ?? raw.createdAt ?? new Date().toISOString(),
 });

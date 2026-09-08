@@ -44,6 +44,18 @@ export const UserManagementPage: React.FC = () => {
   const [selectedBranchFilter, setSelectedBranchFilter] = useState('ALL');
 
   const actorRole = normalizeRole(currentUser?.role);
+  const isBranchManager = actorRole === 'BRANCH_MANAGER';
+  const currentUserBranchIds = currentUser?.assignedBranchIds?.length
+    ? currentUser.assignedBranchIds
+    : currentUser?.branchId
+      ? [currentUser.branchId]
+      : [];
+  const visibleBranches = isBranchManager
+    ? branches.filter((branch) => currentUserBranchIds.includes(branch.id))
+    : branches;
+  const effectiveBranchFilter = isBranchManager && selectedBranchFilter === 'ALL'
+    ? currentUserBranchIds[0] ?? 'ALL'
+    : selectedBranchFilter;
   const allowedRoleNames = actorRole === 'SUPER_ADMIN'
     ? undefined
     : actorRole === 'CAFE_OWNER' || actorRole === 'OWNER' || actorRole === 'RESTAURANT_OWNER'
@@ -56,19 +68,26 @@ export const UserManagementPage: React.FC = () => {
     const role = entry.role?.toUpperCase();
     if (actorRole === 'SUPER_ADMIN' || actorRole === 'CAFE_OWNER' || actorRole === 'OWNER' || actorRole === 'RESTAURANT_OWNER') return true;
     if (!['EXECUTIVE', 'BRANCH_MANAGER'].includes(actorRole)) return false;
-    if (!['STAFF', 'BRANCH_MANAGER'].includes(role || '')) return false;
+    if (isBranchManager && role !== 'STAFF') return false;
+    if (!isBranchManager && !['STAFF', 'BRANCH_MANAGER'].includes(role || '')) return false;
     if (actorRole === 'EXECUTIVE' && currentUser?.assignedBranchIds?.length) {
       return entry.assignedBranchIds?.some((branch) => currentUser.assignedBranchIds?.includes(branch)) ?? false;
     }
-    if (actorRole === 'BRANCH_MANAGER' && currentUser?.branchId) return entry.branchId === currentUser.branchId;
+    if (isBranchManager) {
+      return Boolean(
+        currentUserBranchIds.some(
+          (branchId) => entry.branchId === branchId || entry.assignedBranchIds?.includes(branchId)
+        )
+      );
+    }
     return true;
   });
   const visibleUsers = selectedRoleFilter === 'ALL'
     ? manageableUsers
     : manageableUsers.filter((entry) => normalizeRole(entry.role) === selectedRoleFilter);
-  const branchFilteredUsers = selectedBranchFilter === 'ALL'
+  const branchFilteredUsers = effectiveBranchFilter === 'ALL'
     ? visibleUsers
-    : visibleUsers.filter((entry) => entry.assignedBranchIds?.includes(selectedBranchFilter) || entry.branchId === selectedBranchFilter);
+    : visibleUsers.filter((entry) => entry.assignedBranchIds?.includes(effectiveBranchFilter) || entry.branchId === effectiveBranchFilter);
   const roleSections = [
     { value: 'ALL', label: 'All Users' },
     ...availableRoles
@@ -121,10 +140,15 @@ export const UserManagementPage: React.FC = () => {
     if (!selectedUser && (!password || password.length < 8)) return setFormErrors({ password: 'Password must be at least 8 characters.' });
     if (!selectedUser && password !== confirmPassword) return setFormErrors({ confirmPassword: 'Passwords do not match.' });
     if (!roleId) return setFormErrors({ form: 'Select a role.' });
+    const managerBranchId = isBranchManager && !selectedUser ? effectiveBranchFilter : branchId;
+    if (isBranchManager && !selectedUser && !currentUserBranchIds.includes(managerBranchId)) {
+      return setFormErrors({ form: 'Select one of your assigned branches.' });
+    }
     setIsSubmitting(true); setFormErrors({});
     try {
       const selectedRole = roles.find((role) => role.id === roleId)?.name.toUpperCase();
-      const assignment = selectedRole === 'EXECUTIVE' ? { branch_ids: branchIds } : { branch_id: branchId || undefined };
+      const assignmentBranchId = isBranchManager && !selectedUser ? effectiveBranchFilter : branchId;
+      const assignment = selectedRole === 'EXECUTIVE' ? { branch_ids: branchIds } : { branch_id: assignmentBranchId || undefined };
       if (selectedUser) await accessApi.updateUser(selectedUser.id, { full_name: fullName, email, phone, role_id: roleId, ...assignment });
       else await accessApi.createUser({ full_name: fullName, email, phone, password, role_id: roleId, ...assignment });
       setIsOpen(false); await load(); showToast(selectedUser ? 'User updated successfully' : 'User created successfully. A verification email was sent.', 'success');
@@ -159,10 +183,12 @@ export const UserManagementPage: React.FC = () => {
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold text-slate-900">User Management</h1><p className="text-xs text-slate-500">Create users once, then manage their role, branches, and additional permissions.</p></div><Button variant="primary" size="md" icon={Plus} onClick={openCreate}>Add User</Button></div>
     <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
       <Select
-        label="Branch"
-        value={selectedBranchFilter}
+        label={isBranchManager ? 'Assigned Branch' : 'Branch'}
+        value={effectiveBranchFilter}
         onChange={(event) => setSelectedBranchFilter(event.target.value)}
-        options={[{ value: 'ALL', label: 'All Branches' }, ...branches.map((branch) => ({ value: branch.id, label: branch.name }))]}
+        options={isBranchManager
+          ? visibleBranches.map((branch) => ({ value: branch.id, label: branch.name }))
+          : [{ value: 'ALL', label: 'All Branches' }, ...visibleBranches.map((branch) => ({ value: branch.id, label: branch.name }))]}
       />
       {roleSections.map((section) => (
         <button
@@ -176,7 +202,7 @@ export const UserManagementPage: React.FC = () => {
       ))}
     </div>
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{branchFilteredUsers.map((entry) => <div key={entry.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs"><div className="flex items-start justify-between gap-3"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-700"><UserRound className="h-5 w-5" /></div><div><p className="font-bold text-slate-900">{entry.fullName}</p><p className="text-xs text-slate-500">{entry.email}</p></div></div><Badge variant={entry.isActive ? 'success' : 'neutral'} size="sm">{entry.isActive ? 'Active' : 'Inactive'}</Badge></div><div className="mt-4 flex items-center justify-between"><span className="text-xs font-semibold text-slate-600">{entry.role}</span><div className="flex gap-2"><Button variant="outline" size="sm" disabled={isPermissionLoading} onClick={() => void openPermissions(entry)}>Permissions</Button><Button variant="outline" size="sm" onClick={() => openEdit(entry)}>Edit</Button></div></div></div>)}</div>
-    <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={selectedUser ? 'Edit User' : 'Create New User'} maxWidth="md"><form onSubmit={submit} className="space-y-4">{formErrors.form && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{formErrors.form}</p>}{field('Full Name *', fullName, setFullName, 'text', formErrors.fullName)}{field('Email *', email, setEmail, 'email', formErrors.email)}{field('Phone', phone, setPhone, 'text', formErrors.phone)}{!selectedUser && <>{field('Password *', password, setPassword, 'password', formErrors.password, true)}{field('Confirm Password *', confirmPassword, setConfirmPassword, 'password', formErrors.confirmPassword, true)}</>}<Select label="Role *" value={roleId} onChange={(event) => { setRoleId(event.target.value); setBranchIds([]); }} options={availableRoles.map((role) => ({ value: role.id, label: role.name }))} required />{roles.find((role) => role.id === roleId)?.name.toUpperCase() === 'EXECUTIVE' ? <div><label className="block text-xs font-bold uppercase tracking-wider text-slate-700">Authorized Branches *</label><select multiple value={branchIds} onChange={(event) => setBranchIds(Array.from(event.target.selectedOptions, (option) => option.value))} className="mt-1 min-h-32 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></div> : <Select label="Branch" value={branchId} onChange={(event) => setBranchId(event.target.value)} options={[{ value: '', label: 'No branch assignment' }, ...branches.map((branch) => ({ value: branch.id, label: branch.name }))]} />}<div className="flex justify-end gap-3 border-t border-slate-100 pt-3"><Button type="button" variant="outline" size="sm" onClick={() => setIsOpen(false)}>Cancel</Button><Button type="submit" variant="primary" size="sm" isLoading={isSubmitting}>{selectedUser ? 'Save Changes' : 'Create User'}</Button></div></form></Modal>
+    <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={selectedUser ? 'Edit User' : 'Create New User'} maxWidth="md"><form onSubmit={submit} className="space-y-4">{formErrors.form && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{formErrors.form}</p>}{field('Full Name *', fullName, setFullName, 'text', formErrors.fullName)}{field('Email *', email, setEmail, 'email', formErrors.email)}{field('Phone', phone, setPhone, 'text', formErrors.phone)}{!selectedUser && <>{field('Password *', password, setPassword, 'password', formErrors.password, true)}{field('Confirm Password *', confirmPassword, setConfirmPassword, 'password', formErrors.confirmPassword, true)}</>}<Select label="Role *" value={roleId} onChange={(event) => { setRoleId(event.target.value); setBranchIds([]); }} options={availableRoles.map((role) => ({ value: role.id, label: role.name }))} required />{roles.find((role) => role.id === roleId)?.name.toUpperCase() === 'EXECUTIVE' ? <div><label className="block text-xs font-bold uppercase tracking-wider text-slate-700">Authorized Branches *</label><select multiple value={branchIds} onChange={(event) => setBranchIds(Array.from(event.target.selectedOptions, (option) => option.value))} className="mt-1 min-h-32 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">{visibleBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></div> : <Select label={isBranchManager ? 'Assigned Branch' : 'Branch'} value={branchId} onChange={(event) => setBranchId(event.target.value)} options={[{ value: '', label: 'No branch assignment' }, ...visibleBranches.map((branch) => ({ value: branch.id, label: branch.name }))]} />}<div className="flex justify-end gap-3 border-t border-slate-100 pt-3"><Button type="button" variant="outline" size="sm" onClick={() => setIsOpen(false)}>Cancel</Button><Button type="submit" variant="primary" size="sm" isLoading={isSubmitting}>{selectedUser ? 'Save Changes' : 'Create User'}</Button></div></form></Modal>
     <Modal isOpen={isPermissionOpen} onClose={() => setIsPermissionOpen(false)} title={`Permissions: ${selectedUser?.fullName ?? ''}`} maxWidth="lg"><div className="space-y-5">{permissionError && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{permissionError}</p>}<section><h3 className="mb-2 text-sm font-bold text-slate-900">Role Permissions</h3><div className="space-y-2 rounded-xl bg-slate-50 p-3">{rolePermissions.map((permission) => <p key={permission.id} className="flex items-center gap-2 text-xs text-slate-700"><ShieldCheck className="h-4 w-4 text-emerald-600" />{permission.permission}</p>)}</div></section><section><h3 className="mb-2 text-sm font-bold text-slate-900">Additional User Permissions</h3><div className="grid gap-2 sm:grid-cols-2">{permissions.map((permission) => <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-xs"><input type="checkbox" checked={permissionIds.includes(permission.id)} onChange={() => setPermissionIds((current) => current.includes(permission.id) ? current.filter((id) => id !== permission.id) : [...current, permission.id])} />{permission.permission}</label>)}</div></section><div className="flex justify-end"><Button variant="primary" size="sm" isLoading={isSubmitting} onClick={() => void savePermissions()}>Save Permissions</Button></div></div></Modal>
     {actorRole === 'SUPER_ADMIN' && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs"><h2 className="text-lg font-bold text-slate-900">Role Permission Management</h2><p className="mb-4 text-xs text-slate-500">Manage inherited permissions once per role. Individual user grants remain separate.</p><div className="grid gap-4 md:grid-cols-[220px_1fr]"> <Select label="Role" value={managedRoleId} onChange={(event) => void loadRolePermissions(event.target.value)} options={[{ value: '', label: 'Select role' }, ...roles.map((role) => ({ value: role.id, label: role.name }))]} /><div className="grid gap-2 sm:grid-cols-2">{managedRoleId && permissions.map((permission) => <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-xs"><input type="checkbox" checked={managedRolePermissionIds.includes(permission.id)} onChange={() => setManagedRolePermissionIds((current) => current.includes(permission.id) ? current.filter((id) => id !== permission.id) : [...current, permission.id])} />{permission.permission}</label>)}</div></div>{managedRoleId && <div className="mt-4 flex justify-end"><Button variant="primary" size="sm" isLoading={isSubmitting} onClick={() => void saveRolePermissions()}>Save Role Permissions</Button></div>}</section>}
   </div>;
