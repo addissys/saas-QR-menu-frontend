@@ -25,6 +25,10 @@ const registerSchema = z.object({
     .min(8, 'Password must be at least 8 characters')
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
     .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
 });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
@@ -161,6 +165,21 @@ export const RegisterPage: React.FC = () => {
             {errors.password && (
               <p className="text-red-500 text-[11px] mt-1 font-medium">
                 {errors.password.message}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Input
+              label="Confirm Password *"
+              type="password"
+              placeholder="Repeat your password"
+              icon={Lock}
+              {...register('confirmPassword')}
+            />
+            {errors.confirmPassword && (
+              <p className="text-red-500 text-[11px] mt-1 font-medium">
+                {errors.confirmPassword.message}
               </p>
             )}
           </div>
