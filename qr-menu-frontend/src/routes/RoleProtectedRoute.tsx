@@ -2,13 +2,19 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { UserRole } from '../types';
+import { isRoleAllowed } from '../utils/roles';
 
 interface Props {
-  allowedRoles: UserRole[];
+  allowedRoles: (UserRole | string)[];
+  redirectTo?: string;
   children: React.ReactNode;
 }
 
-export const RoleProtectedRoute: React.FC<Props> = ({ allowedRoles, children }) => {
+export const RoleProtectedRoute: React.FC<Props> = ({
+  allowedRoles,
+  redirectTo = '/unauthorized',
+  children,
+}) => {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
@@ -19,8 +25,8 @@ export const RoleProtectedRoute: React.FC<Props> = ({ allowedRoles, children }) 
     );
   }
 
-  if (!user || !allowedRoles.includes(user.role)) {
-    return <Navigate to="/dashboard" replace />;
+  if (!user || !isRoleAllowed(user.role, allowedRoles)) {
+    return <Navigate to={redirectTo} replace />;
   }
 
   return <>{children}</>;

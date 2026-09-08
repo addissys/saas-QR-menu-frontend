@@ -9,8 +9,10 @@ import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
+import { Modal } from '../../components/ui/Modal';
+import { tenantApi } from '../../api/tenant.api';
 
-import { Search } from 'lucide-react';
+import { Search, Plus, Store, Mail, Phone, MapPin, Building, DollarSign } from 'lucide-react';
 
 export const AdminRestaurantsPage: React.FC = () => {
   const { showToast } = useToast();
@@ -19,6 +21,17 @@ export const AdminRestaurantsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [toggleId, setToggleId] = useState<string | null>(null);
+
+  // Create Restaurant State
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newBusinessName, setNewBusinessName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newAddress, setNewAddress] = useState('');
+  const [newCity, setNewCity] = useState('');
+  const [newCurrencySymbol, setNewCurrencySymbol] = useState('$');
+  const [newDescription, setNewDescription] = useState('');
 
   // ================================
   // Get tenants from backend
@@ -138,21 +151,67 @@ export const AdminRestaurantsPage: React.FC = () => {
     }
   };
 
+  const handleCreateRestaurant = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newBusinessName.trim()) {
+      showToast('Restaurant name is required', 'error');
+      return;
+    }
+    setIsCreating(true);
+    try {
+      await tenantApi.create({
+        businessName: newBusinessName.trim(),
+        email: newEmail.trim() || undefined,
+        phone: newPhone.trim() || undefined,
+        address: newAddress.trim() || undefined,
+        city: newCity.trim() || undefined,
+        currencySymbol: newCurrencySymbol.trim() || '$',
+        description: newDescription.trim() || undefined,
+      });
+      showToast('Restaurant created successfully', 'success');
+      setIsCreateOpen(false);
+      setNewBusinessName('');
+      setNewEmail('');
+      setNewPhone('');
+      setNewAddress('');
+      setNewCity('');
+      setNewDescription('');
+      await fetchTenants();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to create restaurant';
+      showToast(msg, 'error');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
 
       {/* ================================
           Page Header
       ================================= */}
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold text-slate-900">
-          Restaurant Tenant Directory
-        </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold text-slate-900">
+            Restaurant Tenant Directory
+          </h1>
 
-        <p className="text-xs text-slate-500">
-          Super admin management for registered
-          restaurant and cafe organizations
-        </p>
+          <p className="text-xs text-slate-500">
+            Super admin management for registered
+            restaurant and cafe organizations
+          </p>
+        </div>
+
+        <Button
+          variant="primary"
+          size="md"
+          icon={Plus}
+          onClick={() => setIsCreateOpen(true)}
+          className="bg-purple-600 hover:bg-purple-500 text-white font-bold"
+        >
+          Create Restaurant
+        </Button>
       </div>
 
       {/* ================================
@@ -287,6 +346,98 @@ export const AdminRestaurantsPage: React.FC = () => {
         message="Are you sure you want to change the active status of this restaurant tenant?"
         confirmText="Confirm Status Change"
       />
+
+      {/* ================================
+          Create Restaurant Modal
+      ================================= */}
+      <Modal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        title="Create New Restaurant Tenant"
+        maxWidth="lg"
+      >
+        <form onSubmit={handleCreateRestaurant} className="space-y-4">
+          <Input
+            label="Restaurant Name *"
+            placeholder="Artisan Bistro & Cafe"
+            icon={Store}
+            value={newBusinessName}
+            onChange={(e) => setNewBusinessName(e.target.value)}
+            required
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Contact Email"
+              type="email"
+              placeholder="contact@restaurant.com"
+              icon={Mail}
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+            />
+            <Input
+              label="Contact Phone"
+              placeholder="+251 91 123 4567"
+              icon={Phone}
+              value={newPhone}
+              onChange={(e) => setNewPhone(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="City"
+              placeholder="Addis Ababa"
+              icon={Building}
+              value={newCity}
+              onChange={(e) => setNewCity(e.target.value)}
+            />
+            <Input
+              label="Currency Symbol"
+              placeholder="$ or ETB"
+              icon={DollarSign}
+              value={newCurrencySymbol}
+              onChange={(e) => setNewCurrencySymbol(e.target.value)}
+            />
+          </div>
+          <Input
+            label="Address"
+            placeholder="Main Boulevard, Street 12"
+            icon={MapPin}
+            value={newAddress}
+            onChange={(e) => setNewAddress(e.target.value)}
+          />
+          <div className="space-y-1">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Description
+            </label>
+            <textarea
+              rows={2}
+              value={newDescription}
+              onChange={(e) => setNewDescription(e.target.value)}
+              placeholder="Brief description of the restaurant..."
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 resize-none"
+            />
+          </div>
+          <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsCreateOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              isLoading={isCreating}
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold"
+            >
+              Create Restaurant
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
     </div>
   );

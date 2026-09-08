@@ -69,6 +69,7 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
 
         {/* 2. Public QR Digital Menu Links */}
@@ -90,7 +91,22 @@ export default function App() {
           }
         >
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/restaurants" element={<RestaurantProfilePage />} />
+          <Route
+            path="/restaurants"
+            element={
+              <RoleProtectedRoute allowedRoles={['SUPER_ADMIN', 'CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER']}>
+                <RestaurantProfilePage />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/restaurants/create"
+            element={
+              <RoleProtectedRoute allowedRoles={['SUPER_ADMIN', 'CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER']}>
+                <RestaurantProfilePage />
+              </RoleProtectedRoute>
+            }
+          />
           <Route path="/branches" element={<BranchesListPage />} />
           <Route path="/tables" element={<TablesListPage />} />
           <Route path="/qr-codes" element={<QRCodesPage />} />
@@ -139,6 +155,7 @@ export default function App() {
         >
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/restaurants" element={<AdminRestaurantsPage />} />
+          <Route path="/admin/restaurants/create" element={<AdminRestaurantsPage />} />
           <Route path="/admin/restaurants/:tenantId" element={<AdminTenantDetailsPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/branches" element={<AdminBranchesPage />} />
