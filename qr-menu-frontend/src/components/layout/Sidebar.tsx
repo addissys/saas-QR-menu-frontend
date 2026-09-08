@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { normalizeRole } from '../../utils/roles';
 import {
   LayoutDashboard,
   Store,
@@ -13,7 +14,6 @@ import {
   FileSpreadsheet,
   ShieldAlert,
   LogOut,
-  Sparkles,
   Users,
 } from 'lucide-react';
 
@@ -30,7 +30,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isAdmin = false, onCloseMobile
       return [
         { name: 'Admin Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
         { name: 'Tenants Directory', path: '/admin/restaurants', icon: Store },
-        { name: 'Global Search', path: '/admin/search', icon: Sparkles },
         { name: 'Audit Logs', path: '/admin/audit-logs', icon: ShieldAlert },
       ];
     }
@@ -86,20 +85,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ isAdmin = false, onCloseMobile
   const navItems = getNavItems();
 
   const getRoleLabel = () => {
-    switch (user?.role) {
+    switch (normalizeRole(user?.role)) {
       case 'SUPER_ADMIN':
         return 'Super Admin';
-      case 'RESTAURANT_OWNER':
-      case 'OWNER':
-        return 'Cafe Owner';
+      case 'CAFE_OWNER':
+        return 'Owner';
       case 'EXECUTIVE':
-        return `Executive (${user.assignedBranchIds?.length || 2} Branches)`;
+        return 'Executive';
       case 'BRANCH_MANAGER':
         return 'Branch Manager';
       case 'STAFF':
-        return 'Kitchen/Dining Staff';
+        return 'Staff';
       default:
-        return 'Portal User';
+        return 'Unknown Role';
     }
   };
 

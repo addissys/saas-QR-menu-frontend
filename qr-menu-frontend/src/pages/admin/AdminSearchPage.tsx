@@ -10,12 +10,26 @@ import {
   UtensilsCrossed,
 } from 'lucide-react';
 
+type TenantSearchResult = {
+  id: string | number;
+  businessName?: string;
+  [key: string]: unknown;
+};
+
+type MenuItemSearchResult = {
+  id: string | number;
+  name?: string;
+  description?: string;
+  price?: number | string;
+  [key: string]: unknown;
+};
+
 export const AdminSearchPage: React.FC = () => {
   const [query, setQuery] = useState('');
 
   const [results, setResults] = useState<{
-    tenants: any[];
-    menuItems: any[];
+    tenants: TenantSearchResult[];
+    menuItems: MenuItemSearchResult[];
   }>({
     tenants: [],
     menuItems: [],
@@ -38,8 +52,8 @@ export const AdminSearchPage: React.FC = () => {
       const data = await adminApi.search(query.trim());
 
       setResults({
-        tenants: data?.tenants ?? [],
-        menuItems: data?.menuItems ?? [],
+        tenants: ((data?.tenants ?? []) as unknown) as TenantSearchResult[],
+        menuItems: ((data?.menuItems ?? []) as unknown) as MenuItemSearchResult[],
       });
     } catch (error) {
       console.error('Admin search error:', error);

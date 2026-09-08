@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi } from '../../api/admin.api';
 import { Tenant } from '../../types';
@@ -23,37 +23,48 @@ export const AdminRestaurantsPage: React.FC = () => {
   // ================================
   // Get tenants from backend
   // ================================
-  const fetchTenants = async () => {
-  setIsLoading(true);
+  const fetchTenants = useCallback(async () => {
+    setIsLoading(true);
 
-  try {
-    const tenants = await adminApi.getTenants();
+    try {
+      const tenants = await adminApi.getTenants();
 
-    console.log('Admin tenants response:', tenants);
+      console.log('Admin tenants response:', tenants);
 
-    if (Array.isArray(tenants)) {
-      setTenants(tenants);
-    } else {
+      if (Array.isArray(tenants)) {
+        setTenants(tenants);
+      } else {
+        setTenants([]);
+        console.warn('Unexpected tenants response:', tenants);
+      }
+    } catch (error) {
+      console.error('Failed to load tenants:', error);
+
+      showToast('Failed to load tenants', 'error');
+
       setTenants([]);
-      console.warn('Unexpected tenants response:', tenants);
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error('Failed to load tenants:', error);
-
-    showToast('Failed to load tenants', 'error');
-
-    setTenants([]);
-  } finally {
-    setIsLoading(false);
-  }
-};
+  }, [showToast]);
 
   // ================================
   // Load tenants when page opens
   // ================================
   useEffect(() => {
-    fetchTenants();
-  }, []);
+    let isMounted = true;
+
+    const loadTenants = async () => {
+      if (!isMounted) return;
+      await fetchTenants();
+    };
+
+    void loadTenants();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchTenants]);
 
   // ================================
   // Toggle tenant status
@@ -101,13 +112,31 @@ export const AdminRestaurantsPage: React.FC = () => {
   };
 
   // ================================
-  // Search tenants
+  // Search all tenants through the admin search endpoint
   // ================================
-  const filteredTenants = tenants.filter((tenant) =>
-    tenant.businessName
-      ?.toLowerCase()
-      .includes(searchQuery.toLowerCase())
-  );
+  const handleSearch = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const query = searchQuery.trim();
+
+    if (!query) {
+      await fetchTenants();
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const results = await adminApi.search(query);
+      setTenants(results.tenants);
+    } catch (error) {
+      console.error('Failed to search tenants:', error);
+      showToast('Failed to search tenants', 'error');
+      setTenants([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -129,16 +158,28 @@ export const AdminRestaurantsPage: React.FC = () => {
       {/* ================================
           Search
       ================================= */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+      <form
+        onSubmit={handleSearch}
+        className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex gap-2"
+      >
         <Input
-          placeholder="Search restaurant by business name..."
+          placeholder="Search all restaurant tenants..."
           icon={Search}
           value={searchQuery}
           onChange={(e) =>
             setSearchQuery(e.target.value)
           }
         />
-      </div>
+
+        <Button
+          type="submit"
+          variant="primary"
+          size="sm"
+          disabled={isLoading}
+        >
+          {isLoading ? 'Searching...' : 'Search'}
+        </Button>
+      </form>
 
       {/* ================================
           Tenant Table
@@ -149,7 +190,7 @@ export const AdminRestaurantsPage: React.FC = () => {
           <div className="p-8 text-center text-xs text-slate-500">
             Loading restaurants...
           </div>
-        ) : filteredTenants.length === 0 ? (
+        ) : tenants.length === 0 ? (
           <div className="p-8 text-center text-sm text-slate-500">
             {searchQuery
               ? 'No restaurants found.'
@@ -230,7 +271,7 @@ export const AdminRestaurantsPage: React.FC = () => {
               },
             ]}
 
-            data={filteredTenants}
+            data={tenants}
           />
         )}
       </div>
