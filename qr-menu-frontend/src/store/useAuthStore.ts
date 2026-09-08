@@ -44,6 +44,7 @@ interface AuthState {
     fullName: string;
     email: string;
     password: string;
+    confirmPassword: string;
     phone?: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
@@ -112,6 +113,7 @@ export const useAuthStore = create<AuthState>()(
             full_name: data.fullName,
             email: data.email,
             password: data.password,
+            confirm_password: data.confirmPassword,
             phone: data.phone,
           });
           set({ isLoading: false });

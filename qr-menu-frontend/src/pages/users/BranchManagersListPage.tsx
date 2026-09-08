@@ -150,7 +150,7 @@ export const BranchManagersListPage: React.FC = () => {
         role: 'BRANCH_MANAGER',
         assignedBranchIds: [assignedBranchId],
       });
-      showToast(`Branch Manager ${fullName} created successfully`, 'success');
+      showToast(`Branch Manager ${fullName} created successfully. A verification email was sent.`, 'success');
       setIsCreateOpen(false);
       await loadData();
     } catch (err: any) {

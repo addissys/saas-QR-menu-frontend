@@ -136,7 +136,7 @@ export const ExecutivesListPage: React.FC = () => {
         role: 'EXECUTIVE',
         assignedBranchIds,
       });
-      showToast(`Executive ${fullName} created successfully`, 'success');
+      showToast(`Executive ${fullName} created successfully. A verification email was sent.`, 'success');
       setIsCreateOpen(false);
       await loadData();
     } catch (err: any) {

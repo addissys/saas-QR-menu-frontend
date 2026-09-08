@@ -149,7 +149,7 @@ export const StaffListPage: React.FC = () => {
         role: 'STAFF',
         assignedBranchIds: [assignedBranchId],
       });
-      showToast(`Staff member ${fullName} registered successfully`, 'success');
+      showToast(`Staff member ${fullName} registered successfully. A verification email was sent.`, 'success');
       setIsCreateOpen(false);
       await loadData();
     } catch (err: any) {

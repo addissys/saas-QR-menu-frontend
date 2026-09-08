@@ -9,15 +9,28 @@ export const authApi = {
   },
 
   // POST /api/v1/auth/register
-  // Accepts: { full_name, email, password, phone? }
+  // Accepts: { full_name, email, password, confirm_password, phone? }
   // Response: { success, message, data: { user } }
   register: async (payload: {
     full_name: string;
     email: string;
     password: string;
+    confirm_password: string;
     phone?: string;
   }) => {
     const res = await api.post('/auth/register', payload);
+    return res.data;
+  },
+
+  // POST /api/v1/auth/verify-email
+  verifyEmail: async (token: string) => {
+    const res = await api.post('/auth/verify-email', { token });
+    return res.data;
+  },
+
+  // POST /api/v1/auth/resend-verification
+  resendVerification: async (email: string) => {
+    const res = await api.post('/auth/resend-verification', { email });
     return res.data;
   },
 

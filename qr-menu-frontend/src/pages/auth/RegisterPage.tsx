@@ -55,10 +55,11 @@ export const RegisterPage: React.FC = () => {
         fullName: data.fullName,
         email: data.email,
         password: data.password,
+        confirmPassword: data.confirmPassword,
         phone: data.phone || undefined,
       });
-      showToast('Account created! Please sign in to continue.', 'success');
-      navigate('/login');
+      showToast('Account created! Check your email to verify your account.', 'success');
+      navigate(`/verify-email?email=${encodeURIComponent(data.email)}`);
     } catch (err: unknown) {
       let msg = 'Registration failed. Please try again.';
       if (axios.isAxiosError(err)) {

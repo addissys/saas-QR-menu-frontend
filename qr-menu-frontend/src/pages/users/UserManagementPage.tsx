@@ -127,7 +127,7 @@ export const UserManagementPage: React.FC = () => {
       const assignment = selectedRole === 'EXECUTIVE' ? { branch_ids: branchIds } : { branch_id: branchId || undefined };
       if (selectedUser) await accessApi.updateUser(selectedUser.id, { full_name: fullName, email, phone, role_id: roleId, ...assignment });
       else await accessApi.createUser({ full_name: fullName, email, phone, password, role_id: roleId, ...assignment });
-      setIsOpen(false); await load(); showToast(selectedUser ? 'User updated successfully' : 'User created successfully', 'success');
+      setIsOpen(false); await load(); showToast(selectedUser ? 'User updated successfully' : 'User created successfully. A verification email was sent.', 'success');
     } catch (error) { setFormErrors(getUserFormErrors(error)); }
     finally { setIsSubmitting(false); }
   };
