@@ -308,7 +308,7 @@ export const BranchesListPage: React.FC = () => {
               Cancel
             </Button>
             <Button variant="primary" size="sm" type="submit" className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold shadow-md shadow-amber-500/20">
-              {editingBranch ? 'Save Changes' : 'Create Location'}
+              {editingBranch ? 'Save Changes' : 'Create Branch'}
             </Button>
           </div>
         </form>

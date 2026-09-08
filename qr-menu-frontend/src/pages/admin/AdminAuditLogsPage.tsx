@@ -66,6 +66,21 @@ export const AdminAuditLogsPage: React.FC = () => {
       header: 'Role',
       accessor: (l) => <span className="text-xs text-slate-600">{l.userRole || '-'}</span>,
     },
+    {
+      header: 'Details',
+      accessor: (l) => (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={(event) => {
+            event.stopPropagation();
+            void auditLogApi.getById(l.id).then(setSelectedLog);
+          }}
+        >
+          View
+        </Button>
+      ),
+    },
   ];
 
   return (
