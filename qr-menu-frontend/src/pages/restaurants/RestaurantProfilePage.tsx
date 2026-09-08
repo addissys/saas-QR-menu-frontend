@@ -8,6 +8,8 @@ import { menuItemApi } from '../../api/menu-item.api';
 import { userApi } from '../../api/user.api';
 import { Tenant } from '../../types';
 import { useToast } from '../../hooks/useToast';
+import { useAuth } from '../../hooks/useAuth';
+import { normalizeRole } from '../../utils/roles';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -31,10 +33,15 @@ import {
 } from 'lucide-react';
 
 export const RestaurantProfilePage: React.FC = () => {
+  const { user } = useAuth();
   const { showToast } = useToast();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  const normalizedRole = normalizeRole(user?.role);
+  const canCreateRestaurant =
+    normalizedRole === 'SUPER_ADMIN' || normalizedRole === 'CAFE_OWNER';
 
   // Restaurant Basic Info Form State
   const [businessName, setBusinessName] = useState('');
@@ -124,6 +131,10 @@ export const RestaurantProfilePage: React.FC = () => {
         setTenant(res.data);
         showToast('Restaurant profile details saved successfully', 'success');
       } else {
+        if (!canCreateRestaurant) {
+          showToast('You do not have permission to create a restaurant.', 'error');
+          return;
+        }
         const res = await tenantApi.create({
           businessName: businessName.trim(),
           email: email.trim() || undefined,
@@ -146,6 +157,20 @@ export const RestaurantProfilePage: React.FC = () => {
       setIsSaving(false);
     }
   };
+
+  if (!tenant && !isLoading && !canCreateRestaurant) {
+    return (
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-8 text-center space-y-4 max-w-xl mx-auto my-12">
+        <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+          <Shield className="h-6 w-6" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-900">Access Restricted</h2>
+        <p className="text-xs text-slate-500">
+          Your role ({user?.role?.replace(/_/g, ' ') || 'Staff'}) does not have permission to create or register a restaurant organization.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 font-sans max-w-6xl">

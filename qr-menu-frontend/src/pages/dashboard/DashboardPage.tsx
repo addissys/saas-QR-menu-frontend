@@ -7,6 +7,7 @@ import { menuItemApi } from '../../api/menu-item.api';
 import { tableApi } from '../../api/table.api';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { normalizeRole } from '../../utils/roles';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { MenuGrid } from '../../components/menu/MenuGrid';
 import { Button } from '../../components/ui/Button';
@@ -91,6 +92,10 @@ export const DashboardPage: React.FC = () => {
 
   // ── NEW USER ONBOARDING VIEW ─────────────────────────────────────────────────
   if (hasTenant === false) {
+    const normalizedUserRole = normalizeRole(user?.role);
+    const canCreateRestaurant =
+      normalizedUserRole === 'SUPER_ADMIN' || normalizedUserRole === 'CAFE_OWNER';
+
     const joinedDate = user?.createdAt
       ? new Date(user.createdAt).toLocaleDateString('en-US', {
           year: 'numeric',
@@ -98,6 +103,113 @@ export const DashboardPage: React.FC = () => {
           day: 'numeric',
         })
       : 'Recently';
+
+    if (!canCreateRestaurant) {
+      return (
+        <div className="space-y-8 font-sans max-w-4xl mx-auto">
+          {/* Staff/Executive Notice Hero Banner */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="bg-slate-950 text-white rounded-3xl p-8 sm:p-10 shadow-2xl shadow-purple-500/10 border border-slate-800 relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-96 h-96 bg-purple-600/10 blur-[120px] pointer-events-none" />
+            <div className="relative z-10 space-y-4">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', delay: 0.2, stiffness: 200 }}
+                className="inline-flex p-3 bg-purple-600 text-white rounded-2xl shadow-lg shadow-purple-600/25"
+              >
+                <ShieldCheck className="h-7 w-7" />
+              </motion.div>
+
+              <h1 className="text-3xl sm:text-4xl font-black tracking-tight">
+                Welcome, {user?.fullName || 'there'}!
+              </h1>
+              <p className="text-sm sm:text-base text-slate-300 max-w-xl leading-relaxed">
+                Your account is active. You are currently not assigned to an active restaurant branch.
+                Please reach out to your restaurant owner or administrator to configure your branch assignment.
+              </p>
+            </div>
+          </motion.div>
+
+          {/* User Info Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.15 }}
+            className="bg-white rounded-3xl border border-slate-200/80 shadow-md shadow-slate-200/50 p-6 sm:p-8"
+          >
+            <div className="flex items-center gap-2 pb-4 border-b border-slate-100">
+              <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+                <User className="h-5 w-5" />
+              </div>
+              <h2 className="text-base font-black text-slate-900 tracking-tight">
+                Your Account Information
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5">
+              <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="p-2 bg-purple-100 text-purple-600 rounded-xl shrink-0">
+                  <User className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Full Name
+                  </p>
+                  <p className="text-sm font-bold text-slate-900 mt-0.5">
+                    {user?.fullName || '—'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="p-2 bg-blue-100 text-blue-600 rounded-xl shrink-0">
+                  <Mail className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Email Address
+                  </p>
+                  <p className="text-sm font-bold text-slate-900 mt-0.5">
+                    {user?.email || '—'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="p-2 bg-amber-100 text-amber-600 rounded-xl shrink-0">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Account Role
+                  </p>
+                  <p className="text-sm font-bold text-slate-900 mt-0.5">
+                    {user?.role?.replace(/_/g, ' ') || 'Staff Member'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl shrink-0">
+                  <Calendar className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Member Since
+                  </p>
+                  <p className="text-sm font-bold text-slate-900 mt-0.5">{joinedDate}</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      );
+    }
 
     const setupSteps = [
       {
