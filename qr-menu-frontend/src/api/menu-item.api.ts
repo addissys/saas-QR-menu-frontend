@@ -17,6 +17,16 @@ interface RawMenuItem {
   branch?: {
     id?: string;
     tenant_id?: string;
+    branch_name?: string;
+    name?: string;
+    tenant?: {
+      id?: string;
+      business_name?: string;
+    };
+  };
+  tenant?: {
+    id?: string;
+    business_name?: string;
   };
   category_id?: string;
   categoryId?: string;
@@ -60,8 +70,10 @@ interface MenuItemDetailPayload {
 
 const mapMenuItem = (item: RawMenuItem): MenuItem => ({
   id: item.id,
-  tenantId: item.tenant_id ?? item.tenantId ?? item.branch?.tenant_id ?? '',
+  tenantId: item.tenant_id ?? item.tenantId ?? item.branch?.tenant_id ?? item.tenant?.id ?? '',
+  tenantName: item.tenant?.business_name ?? item.branch?.tenant?.business_name ?? '',
   branchId: item.branch_id ?? item.branchId ?? item.branch?.id ?? '',
+  branchName: item.branch?.branch_name ?? item.branch?.name ?? '',
   categoryId: item.category_id ?? item.categoryId ?? item.category?.id ?? '',
   categoryName: item.category?.name ?? item.categoryName ?? '',
   name: item.name ?? '',
@@ -141,9 +153,13 @@ export const menuItemApi = {
     return { data: items };
   },
 
-  getAllGlobal: async (): Promise<{ data: MenuItem[] }> => {
+  getAllGlobal: async (filters?: { tenant_id?: string; branch_id?: string }): Promise<{ data: MenuItem[] }> => {
+    const params: Record<string, string> = {};
+    if (filters?.tenant_id) params.tenant_id = filters.tenant_id;
+    if (filters?.branch_id) params.branch_id = filters.branch_id;
     const response = await api.get<ApiEnvelope<MenuItemListPayload | RawMenuItem[]>>(
-      '/menu-items'
+      '/menu-items',
+      { params }
     );
     return { data: unwrapMenuItems(response) };
   },

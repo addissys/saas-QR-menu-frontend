@@ -56,6 +56,24 @@ interface RawUser {
   isActive?: boolean;
   created_at?: string;
   createdAt?: string;
+  staff_profile?: Array<{
+    branch_id?: string;
+    branch?: {
+      id?: string;
+      branch_name?: string;
+      tenant_id?: string;
+      tenant?: { id?: string; business_name?: string };
+    };
+  }>;
+  branch?: {
+    id?: string;
+    branch_name?: string;
+    tenant_id?: string;
+  };
+  tenant?: {
+    id?: string;
+    business_name?: string;
+  };
 }
 
 /** Branches/menuItems in admin search are returned raw (not mapped) — same as original behavior. */
@@ -146,17 +164,29 @@ const mapTenant = (t: RawTenant): Tenant => ({
   createdAt: t.created_at ?? t.createdAt ?? new Date().toISOString(),
 });
 
-const mapUser = (u: RawUser): User => ({
-  id: u.id,
-  tenantId: u.tenant_id ?? u.tenantId ?? '',
-  email: u.email ?? '',
-  fullName: u.full_name ?? u.fullName ?? u.email ?? 'User',
-  phone: u.phone ?? undefined,
-  profileImage: u.profile_image ?? u.profileImage,
-  role: (typeof u.role === 'object' ? u.role?.name : u.role) as User['role'],
-  isActive: u.is_active ?? u.isActive ?? true,
-  createdAt: u.created_at ?? u.createdAt ?? new Date().toISOString(),
-});
+const mapUser = (u: RawUser): User => {
+  const staffProfile = u.staff_profile?.[0];
+  const branchId = staffProfile?.branch_id ?? staffProfile?.branch?.id ?? u.branch?.id ?? '';
+  const branchName = staffProfile?.branch?.branch_name ?? u.branch?.branch_name ?? '';
+  const tenantId = u.tenant_id ?? u.tenantId ?? staffProfile?.branch?.tenant_id ?? u.branch?.tenant_id ?? u.tenant?.id ?? '';
+  const tenantName = u.tenant?.business_name ?? staffProfile?.branch?.tenant?.business_name ?? '';
+  const assignedBranchIds = u.staff_profile?.map((sp) => sp.branch_id).filter(Boolean) as string[] ?? [];
+  return {
+    id: u.id,
+    tenantId,
+    tenantName,
+    branchId: branchId || undefined,
+    branchName,
+    email: u.email ?? '',
+    fullName: u.full_name ?? u.fullName ?? u.email ?? 'User',
+    phone: u.phone ?? undefined,
+    profileImage: u.profile_image ?? u.profileImage,
+    role: (typeof u.role === 'object' ? u.role?.name : u.role) as User['role'],
+    assignedBranchIds: assignedBranchIds.length > 0 ? assignedBranchIds : (branchId ? [branchId] : []),
+    isActive: u.is_active ?? u.isActive ?? true,
+    createdAt: u.created_at ?? u.createdAt ?? new Date().toISOString(),
+  };
+};
 
 // ---------------------------------------------------------------------------
 // API

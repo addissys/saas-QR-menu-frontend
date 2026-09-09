@@ -11,7 +11,9 @@ export type UserRole =
 export interface User {
   id: string;
   tenantId: string;
+  tenantName?: string;
   branchId?: string;
+  branchName?: string;
   branch_id?: string;
   email: string;
   fullName: string;
@@ -84,7 +86,9 @@ export interface Category {
 export interface MenuItem {
   id: string;
   tenantId?: string;
+  tenantName?: string;
   branchId?: string;
+  branchName?: string;
   categoryId: string;
   categoryName?: string;
   name: string;

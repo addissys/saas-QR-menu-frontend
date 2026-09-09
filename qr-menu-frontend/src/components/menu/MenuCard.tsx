@@ -1,7 +1,7 @@
 import React from 'react';
 import { MenuItem } from '../../types';
 import { Badge } from '../ui/Badge';
-import { Clock, Star, Edit3, Trash2, Power } from 'lucide-react';
+import { Clock, Star, Edit3, Trash2, Power, MapPin } from 'lucide-react';
 
 interface MenuCardProps {
   item: MenuItem;
@@ -67,11 +67,19 @@ export const MenuCard: React.FC<MenuCardProps> = ({
 
         {/* Content */}
         <div className="p-5 space-y-2">
-          {item.categoryName && (
-            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wider">
-              {item.categoryName}
-            </p>
-          )}
+          <div className="flex items-center gap-2">
+            {item.categoryName && (
+              <p className="text-xs font-semibold text-purple-700 uppercase tracking-wider">
+                {item.categoryName}
+              </p>
+            )}
+            {item.branchName && (
+              <span className="flex items-center gap-0.5 text-[10px] text-emerald-600 font-medium">
+                <MapPin className="h-2.5 w-2.5" />
+                {item.branchName}
+              </span>
+            )}
+          </div>
           <h4 className="text-base font-bold text-slate-900 group-hover:text-purple-600 transition-colors line-clamp-1">
             {item.name}
           </h4>

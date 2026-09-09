@@ -33,6 +33,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isAdmin = false, onCloseMobile
       return [
         { name: 'Admin Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
         { name: 'Tenants Directory', path: '/admin/restaurants', icon: Store },
+        { name: 'Branches Catalog', path: '/admin/branches', icon: GitBranch },
+        { name: 'Users Catalog', path: '/admin/users', icon: Users },
+        { name: 'Menu Items Catalog', path: '/admin/menu-items', icon: UtensilsCrossed },
         { name: 'Role Management', path: '/admin/roles', icon: ShieldAlert },
         { name: 'Audit Logs', path: '/admin/audit-logs', icon: FileSpreadsheet },
       ];

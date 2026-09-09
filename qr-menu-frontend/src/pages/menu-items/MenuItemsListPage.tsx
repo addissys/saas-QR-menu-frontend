@@ -13,6 +13,7 @@ import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
+import { Pagination } from '../../components/ui/Pagination';
 import { Plus, Search, UtensilsCrossed, Star, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { normalizeRole } from '../../utils/roles';
 import { usePermission } from '../../hooks/usePermission';
@@ -27,6 +28,8 @@ export const MenuItemsListPage: React.FC = () => {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(12);
   const [isLoading, setIsLoading] = useState(true);
 
   const canCreate = hasPermission('menu_items.create');
@@ -184,6 +187,17 @@ export const MenuItemsListPage: React.FC = () => {
     ? categories
     : categories.filter((category) => category.branchId === selectedBranchId);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedBranchId, selectedCategoryId, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / rowsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedItems = filteredItems.slice(
+    (safePage - 1) * rowsPerPage,
+    safePage * rowsPerPage
+  );
+
   return (
     <div className="space-y-6">
       {isStaff && (
@@ -253,7 +267,7 @@ export const MenuItemsListPage: React.FC = () => {
       </div>
 
       <MenuGrid
-        items={filteredItems}
+        items={paginatedItems}
         isLoading={isLoading}
         onEdit={handleOpenEdit}
         onDelete={(id) => setDeletingId(id)}
@@ -263,6 +277,22 @@ export const MenuItemsListPage: React.FC = () => {
         canManage={canManage}
         onAddNew={handleOpenCreate}
       />
+
+      {filteredItems.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs mt-6">
+          <Pagination
+            currentPage={safePage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalRecords={filteredItems.length}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(size) => {
+              setRowsPerPage(size);
+              setCurrentPage(1);
+            }}
+          />
+        </div>
+      )}
 
       {/* Edit/Create Modal */}
       <Modal

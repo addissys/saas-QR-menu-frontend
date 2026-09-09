@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { auditLogApi } from '../../api/audit-log.api';
 import { AuditLog } from '../../types';
 import { Table, Column } from '../../components/ui/Table';
+import { Pagination } from '../../components/ui/Pagination';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -12,7 +13,9 @@ export const AdminAuditLogsPage: React.FC = () => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState<number | undefined>(undefined);
   const [method, setMethod] = useState('');
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
@@ -21,11 +24,15 @@ export const AdminAuditLogsPage: React.FC = () => {
 
   useEffect(() => {
     setIsLoading(true);
-    auditLogApi.getAllGlobal({ page, limit: 20, method: method || undefined, user_role: role || undefined, success: success || undefined, search: search || undefined })
-      .then((res) => { setLogs(res.data); setTotalPages(res.pagination?.totalPages ?? 1); })
+    auditLogApi.getAllGlobal({ page, limit, method: method || undefined, user_role: role || undefined, success: success || undefined, search: search || undefined })
+      .then((res) => {
+        setLogs(res.data);
+        setTotalPages(res.pagination?.totalPages ?? 1);
+        setTotalRecords(res.pagination?.total ?? res.data.length);
+      })
       .catch(() => setLogs([]))
       .finally(() => setIsLoading(false));
-  }, [page, method, role, success, search]);
+  }, [page, limit, method, role, success, search]);
 
   const columns: Column<AuditLog>[] = [
     {
@@ -101,10 +108,22 @@ export const AdminAuditLogsPage: React.FC = () => {
         {isLoading ? (
           <div className="p-8 text-center text-xs text-slate-400">Loading master audit logs...</div>
         ) : (
-          <div onClick={(event) => { const row = (event.target as HTMLElement).closest('tr'); const index = row ? Array.from(row.parentElement?.children ?? []).indexOf(row) : -1; if (index >= 0 && logs[index]) void auditLogApi.getById(logs[index].id).then(setSelectedLog); }}><Table columns={columns} data={logs} emptyMessage="No master audit records" /></div>
+          <div onClick={(event) => { const row = (event.target as HTMLElement).closest('tr'); const index = row ? Array.from(row.parentElement?.children ?? []).indexOf(row) : -1; if (index >= 0 && logs[index]) void auditLogApi.getById(logs[index].id).then(setSelectedLog); }}>
+            <Table columns={columns} data={logs} emptyMessage="No master audit records" paginated={false} />
+          </div>
         )}
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          totalRecords={totalRecords}
+          rowsPerPage={limit}
+          onRowsPerPageChange={(size) => {
+            setLimit(size);
+            setPage(1);
+          }}
+        />
       </div>
-      <div className="flex items-center justify-between text-xs text-slate-500"><span>Page {page} of {totalPages}</span><div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</Button><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Next</Button></div></div>
       <Modal isOpen={!!selectedLog} onClose={() => setSelectedLog(null)} title="Request Details" maxWidth="xl">{selectedLog && <div className="space-y-4 text-xs"><div className="grid gap-3 sm:grid-cols-3"><div><b>Method</b><p>{selectedLog.method || '-'}</p></div><div><b>Status</b><p>{selectedLog.statusCode || '-'}</p></div><div><b>Result</b><p>{selectedLog.success === false ? 'FAILED' : 'SUCCESS'}</p></div></div><div><b>Endpoint</b><pre className="mt-1 overflow-auto rounded-xl bg-slate-50 p-3">{selectedLog.endpoint || '-'}</pre></div><div className="grid gap-4 sm:grid-cols-2"><div><b>Request Body</b><pre className="mt-1 max-h-64 overflow-auto rounded-xl bg-slate-50 p-3">{JSON.stringify(selectedLog.requestBody ?? {}, null, 2)}</pre></div><div><b>Response Body</b><pre className="mt-1 max-h-64 overflow-auto rounded-xl bg-slate-50 p-3">{JSON.stringify(selectedLog.responseBody ?? {}, null, 2)}</pre></div></div><p><b>Error:</b> {selectedLog.errorMessage || 'None'}</p></div>}</Modal>
     </div>
   );
