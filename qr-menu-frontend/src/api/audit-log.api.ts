@@ -64,6 +64,17 @@ interface AuditLogListPayload {
 // Mapping helpers
 // ---------------------------------------------------------------------------
 
+const parseJsonIfNeeded = (val: unknown): unknown => {
+  if (typeof val === 'string') {
+    try {
+      return JSON.parse(val);
+    } catch {
+      return val;
+    }
+  }
+  return val;
+};
+
 const mapAuditLog = (log: RawAuditLog): AuditLog => ({
   id: log.id,
   tenantId: log.tenant_id ?? log.tenantId ?? '',
@@ -87,8 +98,8 @@ const mapAuditLog = (log: RawAuditLog): AuditLog => ({
   method: log.method,
   endpoint: log.endpoint,
   statusCode: log.status_code ?? log.statusCode,
-  requestBody: log.request_body ?? log.requestBody,
-  responseBody: log.response_body ?? log.responseBody,
+  requestBody: parseJsonIfNeeded(log.request_body ?? log.requestBody),
+  responseBody: parseJsonIfNeeded(log.response_body ?? log.responseBody),
   success: log.success,
   errorMessage: log.error_message ?? log.errorMessage,
 });

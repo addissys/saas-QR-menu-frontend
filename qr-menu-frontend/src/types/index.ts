@@ -22,6 +22,7 @@ export interface User {
   role: UserRole;
   assignedBranchIds?: string[];
   permissions?: string[];
+  isOnboardingCompleted?: boolean;
   isActive: boolean;
   createdAt: string;
 }

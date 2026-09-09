@@ -76,7 +76,9 @@ export const UserManagementPage: React.FC = () => {
     const roleName = role.name.toUpperCase();
     if (actorRole === 'SUPER_ADMIN') return true;
     if (roleName === 'SUPER_ADMIN') return false;
-    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER'].includes(actorRole)) return true;
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER'].includes(actorRole)) {
+      return !['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER'].includes(roleName);
+    }
     if (actorRole === 'EXECUTIVE') {
       return !['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE'].includes(roleName);
     }
@@ -291,59 +293,67 @@ export const UserManagementPage: React.FC = () => {
         </button>
       ))}
     </div>
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {paginatedUsers.map((entry) => {
-        const branchName = entry.branchName || branches.find((b) => b.id === entry.branchId)?.name;
-        const assignedCount = entry.assignedBranchIds?.length ?? 0;
-        return (
-          <div key={entry.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-700">
-                  <UserRound className="h-5 w-5" />
+    {searchFilteredUsers.length === 0 ? (
+      <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-xs">
+        <UserRound className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+        <h3 className="text-base font-bold text-slate-900">No users found</h3>
+        <p className="text-xs text-slate-500 mt-1">There are no users registered for this role or branch scope.</p>
+      </div>
+    ) : (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {paginatedUsers.map((entry) => {
+          const branchName = entry.branchName || branches.find((b) => b.id === entry.branchId)?.name;
+          const assignedCount = entry.assignedBranchIds?.length ?? 0;
+          return (
+            <div key={entry.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-700">
+                    <UserRound className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900">{entry.fullName}</p>
+                    <p className="text-xs text-slate-500">{entry.email}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-bold text-slate-900">{entry.fullName}</p>
-                  <p className="text-xs text-slate-500">{entry.email}</p>
+                <Badge variant={entry.isActive ? 'success' : 'neutral'} size="sm">
+                  {entry.isActive ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+              {/* Branch assignment badge */}
+              {(branchName || assignedCount > 1) && (
+                <div className="mt-2">
+                  {assignedCount > 1 ? (
+                    <Badge variant="amber" size="sm">
+                      <MapPin className="h-3 w-3 mr-1 inline" />Multi-Branch ({assignedCount})
+                    </Badge>
+                  ) : branchName ? (
+                    <Badge variant="neutral" size="sm">
+                      <MapPin className="h-3 w-3 mr-1 inline" />{branchName}
+                    </Badge>
+                  ) : null}
+                </div>
+              )}
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-600">{entry.role}</span>
+                <div className="flex gap-2">
+                  {canManagePermissions && (
+                    <Button variant="outline" size="sm" disabled={isPermissionLoading} onClick={() => void openPermissions(entry)}>
+                      Permissions
+                    </Button>
+                  )}
+                  {canUpdateUser && (
+                    <Button variant="outline" size="sm" onClick={() => openEdit(entry)}>
+                      Edit
+                    </Button>
+                  )}
                 </div>
               </div>
-              <Badge variant={entry.isActive ? 'success' : 'neutral'} size="sm">
-                {entry.isActive ? 'Active' : 'Inactive'}
-              </Badge>
             </div>
-            {/* Branch assignment badge */}
-            {(branchName || assignedCount > 1) && (
-              <div className="mt-2">
-                {assignedCount > 1 ? (
-                  <Badge variant="amber" size="sm">
-                    <MapPin className="h-3 w-3 mr-1 inline" />Multi-Branch ({assignedCount})
-                  </Badge>
-                ) : branchName ? (
-                  <Badge variant="neutral" size="sm">
-                    <MapPin className="h-3 w-3 mr-1 inline" />{branchName}
-                  </Badge>
-                ) : null}
-              </div>
-            )}
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-600">{entry.role}</span>
-              <div className="flex gap-2">
-                {canManagePermissions && (
-                  <Button variant="outline" size="sm" disabled={isPermissionLoading} onClick={() => void openPermissions(entry)}>
-                    Permissions
-                  </Button>
-                )}
-                {canUpdateUser && (
-                  <Button variant="outline" size="sm" onClick={() => openEdit(entry)}>
-                    Edit
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    )}
 
     {searchFilteredUsers.length > 0 && (
       <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">

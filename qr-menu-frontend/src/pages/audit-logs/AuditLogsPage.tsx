@@ -179,8 +179,8 @@ export const AuditLogsPage: React.FC = () => {
             </div>
             <div><b>Endpoint</b><pre className="mt-1 overflow-auto rounded-xl bg-slate-50 p-3">{selectedLog.endpoint || '-'}</pre></div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div><b>Request Body</b><pre className="mt-1 max-h-64 overflow-auto rounded-xl bg-slate-50 p-3">{JSON.stringify(selectedLog.requestBody ?? {}, null, 2)}</pre></div>
-              <div><b>Response Body</b><pre className="mt-1 max-h-64 overflow-auto rounded-xl bg-slate-50 p-3">{JSON.stringify(selectedLog.responseBody ?? {}, null, 2)}</pre></div>
+              <div><b>Request Body</b><pre className="mt-1 max-h-64 overflow-auto rounded-xl bg-slate-50 p-3 font-mono text-[11px] whitespace-pre-wrap">{JSON.stringify(selectedLog.requestBody ?? {}, null, 2)}</pre></div>
+              <div><b>Response Body</b><pre className="mt-1 max-h-64 overflow-auto rounded-xl bg-slate-50 p-3 font-mono text-[11px] whitespace-pre-wrap">{JSON.stringify(selectedLog.responseBody ?? {}, null, 2)}</pre></div>
             </div>
             <p><b>Error:</b> {selectedLog.errorMessage || 'None'}</p>
           </div>

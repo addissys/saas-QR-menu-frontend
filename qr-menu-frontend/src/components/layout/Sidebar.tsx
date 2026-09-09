@@ -33,9 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isAdmin = false, onCloseMobile
       return [
         { name: 'Admin Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
         { name: 'Tenants Directory', path: '/admin/restaurants', icon: Store },
-        { name: 'Branches Catalog', path: '/admin/branches', icon: GitBranch },
-        { name: 'Users Catalog', path: '/admin/users', icon: Users },
-        { name: 'Menu Items Catalog', path: '/admin/menu-items', icon: UtensilsCrossed },
+        
         { name: 'Role Management', path: '/admin/roles', icon: ShieldAlert },
         { name: 'Audit Logs', path: '/admin/audit-logs', icon: FileSpreadsheet },
       ];
@@ -120,7 +118,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isAdmin = false, onCloseMobile
             <QrCode className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="font-extrabold text-white text-base tracking-tight">QR DineMenu</h1>
+            <h1 className="font-extrabold text-white text-base tracking-tight">QR Menu</h1>
             <p className="text-[10px] text-purple-400 font-semibold tracking-wider uppercase">
               {getRoleLabel()}
             </p>

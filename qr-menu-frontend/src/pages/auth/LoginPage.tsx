@@ -43,6 +43,8 @@ export const LoginPage: React.FC = () => {
       const user = useAuthStore.getState().user;
       if (user?.role === 'SUPER_ADMIN') {
         navigate('/admin/dashboard');
+      } else if (user?.role === 'CAFE_OWNER' && user?.isOnboardingCompleted === false) {
+        navigate('/restaurants');
       } else {
         navigate('/dashboard');
       }
