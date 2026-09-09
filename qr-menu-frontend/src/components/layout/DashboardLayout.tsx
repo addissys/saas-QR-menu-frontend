@@ -1,12 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { useAuthStore } from '../../store/useAuthStore';
 
 export const DashboardLayout: React.FC = () => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const location = useLocation();
+  const refreshCurrentUser = useAuthStore((state) => state.refreshCurrentUser);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      void refreshCurrentUser();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [refreshCurrentUser]);
 
   return (
     <div className="min-h-screen bg-slate-50/80 flex font-sans selection:bg-amber-500 selection:text-white">

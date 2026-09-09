@@ -72,6 +72,7 @@ interface AuthState {
   }) => Promise<void>;
   logout: () => Promise<void>;
   initAuth: () => Promise<void>;
+  refreshCurrentUser: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -82,6 +83,20 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       isAuthenticated: false,
       isLoading: true,
+
+      // ── Refresh user profile and permissions silently ───────────────────────
+      refreshCurrentUser: async () => {
+        const token = localStorage.getItem('qr_access_token');
+        if (!token) return;
+        try {
+          const res = await authApi.getCurrentUser();
+          const rawUser = res.data?.user ?? res.data;
+          const user = mapRawUser(rawUser);
+          set({ user });
+        } catch {
+          // Keep current state on transient error
+        }
+      },
 
       // ── Initialize auth state from stored token on app boot ──────────────────
       initAuth: async () => {

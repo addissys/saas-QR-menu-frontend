@@ -43,38 +43,38 @@ export const Sidebar: React.FC<SidebarProps> = ({ isAdmin = false, onCloseMobile
     // Dashboard — always visible
     items.push({ name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard });
 
-    // Restaurant Info — owner roles
-    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER'].includes(normalizedRole)) {
+    // Restaurant Info — owner roles or tenant permissions
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER'].includes(normalizedRole) || hasAnyPermission('tenants.read', 'tenants.update', 'tenants.create')) {
       items.push({ name: 'Restaurant Info', path: '/restaurants', icon: Store });
     }
 
     // Branches
-    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasPermission('branches.read')) {
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasAnyPermission('branches.read', 'branches.create', 'branches.update', 'branches.delete')) {
       items.push({ name: 'Branches', path: '/branches', icon: GitBranch });
     }
 
     // User Management
-    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasPermission('users.read')) {
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasAnyPermission('users.read', 'users.create', 'users.update', 'users.delete', 'users.manage_permissions')) {
       items.push({ name: 'User Management', path: '/staff-members', icon: Users });
     }
 
     // Tables
-    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasPermission('tables.read')) {
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasAnyPermission('tables.read', 'tables.create', 'tables.update', 'tables.delete')) {
       items.push({ name: 'Tables Management', path: '/tables', icon: TableIcon });
     }
 
     // QR Codes
-    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasPermission('qr_codes.read')) {
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasAnyPermission('qr_codes.read', 'qr_codes.create', 'qr_codes.delete')) {
       items.push({ name: 'QR Codes Generator', path: '/qr-codes', icon: QrCode });
     }
 
     // Categories
-    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasPermission('categories.read')) {
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasAnyPermission('categories.read', 'categories.create', 'categories.update', 'categories.delete')) {
       items.push({ name: 'Menu Categories', path: '/categories', icon: FolderTree });
     }
 
     // Dishes & Menu Catalog — visible when user has any menu_items permission or has a management role
-    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasAnyPermission('menu_items.read', 'menu_items.create', 'menu_items.update', 'menu_items.delete')) {
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasAnyPermission('menu_items.read', 'menu_items.create', 'menu_items.update', 'menu_items.delete', 'menu_items.toggle_availability', 'menu_items.toggle_featured')) {
       items.push({ name: 'Dishes & Menu Catalog', path: '/menu-items', icon: UtensilsCrossed });
     }
 

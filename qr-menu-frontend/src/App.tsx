@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { RoleProtectedRoute } from './routes/RoleProtectedRoute';
+import { PermissionProtectedRoute } from './routes/PermissionProtectedRoute';
 import { useAuthStore } from './store/useAuthStore';
 import { ToastRenderer } from './components/ui/ToastRenderer';
 
@@ -97,17 +98,17 @@ export default function App() {
           <Route
             path="/restaurants"
             element={
-              <RoleProtectedRoute allowedRoles={['SUPER_ADMIN', 'CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER']}>
+              <PermissionProtectedRoute anyPermission={['tenants.read', 'tenants.update', 'tenants.create']}>
                 <RestaurantProfilePage />
-              </RoleProtectedRoute>
+              </PermissionProtectedRoute>
             }
           />
           <Route
             path="/restaurants/create"
             element={
-              <RoleProtectedRoute allowedRoles={['SUPER_ADMIN', 'CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER']}>
+              <PermissionProtectedRoute anyPermission={['tenants.create']}>
                 <RestaurantProfilePage />
-              </RoleProtectedRoute>
+              </PermissionProtectedRoute>
             }
           />
           <Route path="/branches" element={<BranchesListPage />} />
@@ -121,18 +122,18 @@ export default function App() {
           <Route path="/change-password" element={<ChangePasswordPage />} />
         </Route>
 
-                    {/* . Staff Management Routes (Cafe Owner, Executive, Branch Manager) */}
-            <Route
-              element={
-                <ProtectedRoute>
-                  <RoleProtectedRoute allowedRoles={['SUPER_ADMIN', 'CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER']}>
-                    <DashboardLayout />
-                  </RoleProtectedRoute>
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/staff-members" element={<UserManagementPage />} />
-            </Route>
+        {/* 4. Staff Management Routes (Cafe Owner, Executive, Branch Manager, or users with user permissions) */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <PermissionProtectedRoute anyPermission={['users.read', 'users.create', 'users.update', 'users.delete', 'users.manage_permissions']}>
+                <DashboardLayout />
+              </PermissionProtectedRoute>
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/staff-members" element={<UserManagementPage />} />
+        </Route>
 
         {/* . Branch Manager Management Routes (Cafe Owner & Executive) */}
             <Route
