@@ -165,18 +165,24 @@ export const BranchesListPage: React.FC = () => {
           >
             <ExternalLink className="h-4 w-4" />
           </Link>
-          <button
-            onClick={() => handleOpenEdit(b)}
-            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-          >
-            <Edit3 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setDeletingId(b.id)}
-            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {!isBranchManager && (
+            <>
+              <button
+                onClick={() => handleOpenEdit(b)}
+                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                title="Edit Branch"
+              >
+                <Edit3 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setDeletingId(b.id)}
+                className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
+                title="Delete Branch"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </>
+          )}
         </div>
       ),
     },

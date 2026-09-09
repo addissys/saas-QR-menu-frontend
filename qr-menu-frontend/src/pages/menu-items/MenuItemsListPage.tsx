@@ -15,10 +15,12 @@ import { Modal } from '../../components/ui/Modal';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { Plus, Search, UtensilsCrossed, Star, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { normalizeRole } from '../../utils/roles';
+import { usePermission } from '../../hooks/usePermission';
 
 export const MenuItemsListPage: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { hasPermission } = usePermission();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
@@ -27,8 +29,11 @@ export const MenuItemsListPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  const isStaff = user?.role === 'STAFF';
-  const canManage = !isStaff;
+  const canCreate = hasPermission('menu_items.create');
+  const canUpdate = hasPermission('menu_items.update');
+  const canDelete = hasPermission('menu_items.delete');
+  const canManage = canCreate || canUpdate || canDelete;
+  const isStaff = !canManage;
   const isCafeOwner = ['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'SUPER_ADMIN']
     .includes(normalizeRole(user?.role));
 

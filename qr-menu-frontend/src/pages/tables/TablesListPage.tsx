@@ -12,9 +12,16 @@ import { Table, Column } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { PrintableQRModal } from '../../components/qr/PrintableQRModal';
 import { Plus, Table as TableIcon, QrCode, Edit3, Trash2, Users, Printer, FileText } from 'lucide-react';
+import { usePermission } from '../../hooks/usePermission';
 
 export const TablesListPage: React.FC = () => {
   const { showToast } = useToast();
+  const { hasPermission } = usePermission();
+
+  const canCreate = hasPermission('tables.create');
+  const canUpdate = hasPermission('tables.update');
+  const canDelete = hasPermission('tables.delete');
+
   const [tables, setTables] = useState<TableType[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -145,7 +152,7 @@ export const TablesListPage: React.FC = () => {
     },
     {
       header: 'Actions',
-      accessor: (t) => (
+      accessor: (t: TableType) => (
         <div className="flex items-center gap-1">
           <button
             onClick={() => handleOpenPrintForTable(t)}
@@ -156,20 +163,24 @@ export const TablesListPage: React.FC = () => {
             <span>PDF Card</span>
           </button>
 
-          <button
-            onClick={() => handleOpenEdit(t)}
-            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-            title="Edit Table"
-          >
-            <Edit3 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setDeletingId(t.id)}
-            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50"
-            title="Delete Table"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {canUpdate && (
+            <button
+              onClick={() => handleOpenEdit(t)}
+              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              title="Edit Table"
+            >
+              <Edit3 className="h-4 w-4" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={() => setDeletingId(t.id)}
+              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50"
+              title="Delete Table"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -195,9 +206,11 @@ export const TablesListPage: React.FC = () => {
           >
             Batch Print Cards PDF
           </Button>
-          <Button variant="primary" size="md" icon={Plus} onClick={handleOpenCreate}>
-            Add Dining Table
-          </Button>
+          {canCreate && (
+            <Button variant="primary" size="md" icon={Plus} onClick={handleOpenCreate}>
+              Add Dining Table
+            </Button>
+          )}
         </div>
       </div>
 

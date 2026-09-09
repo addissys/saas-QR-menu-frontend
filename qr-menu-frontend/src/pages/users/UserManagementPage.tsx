@@ -20,6 +20,7 @@ export const UserManagementPage: React.FC = () => {
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [permissions, setPermissions] = useState<PermissionRecord[]>([]);
+  const [grantablePermissions, setGrantablePermissions] = useState<PermissionRecord[]>([]);
   const [rolePermissions, setRolePermissions] = useState<PermissionRecord[]>([]);
   const [extraPermissions, setExtraPermissions] = useState<PermissionRecord[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -56,14 +57,19 @@ export const UserManagementPage: React.FC = () => {
   const effectiveBranchFilter = isBranchManager && selectedBranchFilter === 'ALL'
     ? currentUserBranchIds[0] ?? 'ALL'
     : selectedBranchFilter;
-  const allowedRoleNames = actorRole === 'SUPER_ADMIN'
-    ? undefined
-    : actorRole === 'CAFE_OWNER' || actorRole === 'OWNER' || actorRole === 'RESTAURANT_OWNER'
-      ? ['EXECUTIVE', 'BRANCH_MANAGER', 'STAFF']
-      : actorRole === 'EXECUTIVE'
-        ? ['BRANCH_MANAGER', 'STAFF']
-        : ['STAFF'];
-  const availableRoles = roles.filter((role) => !allowedRoleNames || allowedRoleNames.includes(role.name.toUpperCase()));
+  const availableRoles = roles.filter((role) => {
+    const roleName = role.name.toUpperCase();
+    if (actorRole === 'SUPER_ADMIN') return true;
+    if (roleName === 'SUPER_ADMIN') return false;
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER'].includes(actorRole)) return true;
+    if (actorRole === 'EXECUTIVE') {
+      return !['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE'].includes(roleName);
+    }
+    if (actorRole === 'BRANCH_MANAGER') {
+      return !['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(roleName);
+    }
+    return false;
+  });
   const manageableUsers = users.filter((entry) => {
     const role = entry.role?.toUpperCase();
     if (actorRole === 'SUPER_ADMIN' || actorRole === 'CAFE_OWNER' || actorRole === 'OWNER' || actorRole === 'RESTAURANT_OWNER') return true;
@@ -101,10 +107,10 @@ export const UserManagementPage: React.FC = () => {
 
   const load = async () => {
     try {
-      const [userList, roleList, branchList, permissionList] = await Promise.all([
-        accessApi.getUsers(), accessApi.getRoles(), branchApi.getAll(), accessApi.getPermissions(),
+      const [userList, roleList, branchList, permissionList, grantableList] = await Promise.all([
+        accessApi.getUsers(), accessApi.getRoles(), branchApi.getAll(), accessApi.getPermissions(), accessApi.getGrantablePermissions(),
       ]);
-      setUsers(userList); setRoles(roleList); setBranches(branchList.data); setPermissions(permissionList);
+      setUsers(userList); setRoles(roleList); setBranches(branchList.data); setPermissions(permissionList); setGrantablePermissions(grantableList);
     } catch (error) { showToast('Failed to load user management data', 'error'); }
   };
   useEffect(() => { void load(); }, []);
@@ -161,8 +167,17 @@ export const UserManagementPage: React.FC = () => {
     setIsPermissionLoading(true);
     setPermissionError('');
     try {
-      const [inherited, additional] = await Promise.all([accessApi.getRolePermissions(role.id), accessApi.getUserPermissions(entry.id)]);
-      setSelectedUser(entry); setRolePermissions(inherited); setExtraPermissions(additional); setPermissionIds(additional.map((item) => item.id)); setIsPermissionOpen(true);
+      const [inherited, additional, grantableList] = await Promise.all([
+        accessApi.getRolePermissions(role.id),
+        accessApi.getUserPermissions(entry.id),
+        accessApi.getGrantablePermissions(),
+      ]);
+      setSelectedUser(entry);
+      setRolePermissions(inherited);
+      setExtraPermissions(additional);
+      setGrantablePermissions(grantableList);
+      setPermissionIds(additional.map((item) => item.id));
+      setIsPermissionOpen(true);
     } catch (error) {
       setPermissionError('Unable to load this user\'s permissions.');
       showToast('Unable to load user permissions', 'error');
@@ -173,9 +188,16 @@ export const UserManagementPage: React.FC = () => {
   const savePermissions = async () => {
     if (!selectedUser) return;
     setIsSubmitting(true);
-    try { await accessApi.setUserPermissions(selectedUser.id, permissionIds); setIsPermissionOpen(false); showToast('Additional permissions saved', 'success'); }
-    catch (error) { showToast('Failed to save permissions', 'error'); }
-    finally { setIsSubmitting(false); }
+    try {
+      await accessApi.setUserPermissions(selectedUser.id, permissionIds);
+      setIsPermissionOpen(false);
+      showToast('Additional permissions saved', 'success');
+      // Reload to reflect updated effective permissions in the UI
+      await load();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message ?? 'Failed to save permissions';
+      showToast(msg, 'error');
+    } finally { setIsSubmitting(false); }
   };
   const field = (label: string, value: string, setValue: (value: string) => void, type = 'text', error?: string, passwordToggle = false) => <Input label={label} value={value} type={type} onChange={(event) => setValue(event.target.value)} error={error} showPasswordToggle={passwordToggle} required />;
 
@@ -203,7 +225,7 @@ export const UserManagementPage: React.FC = () => {
     </div>
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{branchFilteredUsers.map((entry) => <div key={entry.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs"><div className="flex items-start justify-between gap-3"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-700"><UserRound className="h-5 w-5" /></div><div><p className="font-bold text-slate-900">{entry.fullName}</p><p className="text-xs text-slate-500">{entry.email}</p></div></div><Badge variant={entry.isActive ? 'success' : 'neutral'} size="sm">{entry.isActive ? 'Active' : 'Inactive'}</Badge></div><div className="mt-4 flex items-center justify-between"><span className="text-xs font-semibold text-slate-600">{entry.role}</span><div className="flex gap-2"><Button variant="outline" size="sm" disabled={isPermissionLoading} onClick={() => void openPermissions(entry)}>Permissions</Button><Button variant="outline" size="sm" onClick={() => openEdit(entry)}>Edit</Button></div></div></div>)}</div>
     <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={selectedUser ? 'Edit User' : 'Create New User'} maxWidth="md"><form onSubmit={submit} className="space-y-4">{formErrors.form && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{formErrors.form}</p>}{field('Full Name *', fullName, setFullName, 'text', formErrors.fullName)}{field('Email *', email, setEmail, 'email', formErrors.email)}{field('Phone', phone, setPhone, 'text', formErrors.phone)}{!selectedUser && <>{field('Password *', password, setPassword, 'password', formErrors.password, true)}{field('Confirm Password *', confirmPassword, setConfirmPassword, 'password', formErrors.confirmPassword, true)}</>}<Select label="Role *" value={roleId} onChange={(event) => { setRoleId(event.target.value); setBranchIds([]); }} options={availableRoles.map((role) => ({ value: role.id, label: role.name }))} required />{roles.find((role) => role.id === roleId)?.name.toUpperCase() === 'EXECUTIVE' ? <div><label className="block text-xs font-bold uppercase tracking-wider text-slate-700">Authorized Branches *</label><select multiple value={branchIds} onChange={(event) => setBranchIds(Array.from(event.target.selectedOptions, (option) => option.value))} className="mt-1 min-h-32 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">{visibleBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></div> : <Select label={isBranchManager ? 'Assigned Branch' : 'Branch'} value={branchId} onChange={(event) => setBranchId(event.target.value)} options={[{ value: '', label: 'No branch assignment' }, ...visibleBranches.map((branch) => ({ value: branch.id, label: branch.name }))]} />}<div className="flex justify-end gap-3 border-t border-slate-100 pt-3"><Button type="button" variant="outline" size="sm" onClick={() => setIsOpen(false)}>Cancel</Button><Button type="submit" variant="primary" size="sm" isLoading={isSubmitting}>{selectedUser ? 'Save Changes' : 'Create User'}</Button></div></form></Modal>
-    <Modal isOpen={isPermissionOpen} onClose={() => setIsPermissionOpen(false)} title={`Permissions: ${selectedUser?.fullName ?? ''}`} maxWidth="lg"><div className="space-y-5">{permissionError && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{permissionError}</p>}<section><h3 className="mb-2 text-sm font-bold text-slate-900">Role Permissions</h3><div className="space-y-2 rounded-xl bg-slate-50 p-3">{rolePermissions.map((permission) => <p key={permission.id} className="flex items-center gap-2 text-xs text-slate-700"><ShieldCheck className="h-4 w-4 text-emerald-600" />{permission.permission}</p>)}</div></section><section><h3 className="mb-2 text-sm font-bold text-slate-900">Additional User Permissions</h3><div className="grid gap-2 sm:grid-cols-2">{permissions.map((permission) => <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-xs"><input type="checkbox" checked={permissionIds.includes(permission.id)} onChange={() => setPermissionIds((current) => current.includes(permission.id) ? current.filter((id) => id !== permission.id) : [...current, permission.id])} />{permission.permission}</label>)}</div></section><div className="flex justify-end"><Button variant="primary" size="sm" isLoading={isSubmitting} onClick={() => void savePermissions()}>Save Permissions</Button></div></div></Modal>
+    <Modal isOpen={isPermissionOpen} onClose={() => setIsPermissionOpen(false)} title={`Permissions: ${selectedUser?.fullName ?? ''}`} maxWidth="lg"><div className="space-y-5">{permissionError && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{permissionError}</p>}<section><h3 className="mb-2 text-sm font-bold text-slate-900">Role Permissions (Inherited)</h3><p className="mb-2 text-xs text-slate-500">These permissions belong to the {selectedUser?.role} role and apply automatically.</p><div className="space-y-2 rounded-xl bg-slate-50 p-3">{rolePermissions.length > 0 ? rolePermissions.map((permission) => <p key={permission.id} className="flex items-center gap-2 text-xs text-slate-700"><ShieldCheck className="h-4 w-4 text-emerald-600" />{permission.permission}</p>) : <p className="text-xs text-slate-400">No role permissions.</p>}</div></section><section><h3 className="mb-2 text-sm font-bold text-slate-900">Additional User Permissions</h3><p className="mb-2 text-xs text-slate-500">Assign user-specific permissions beyond their base role. You can only grant permissions within your own authority.</p><div className="grid gap-2 sm:grid-cols-2">{grantablePermissions.filter((p) => !rolePermissions.some((rp) => rp.id === p.id)).map((permission) => <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-xs"><input type="checkbox" checked={permissionIds.includes(permission.id)} onChange={() => setPermissionIds((current) => current.includes(permission.id) ? current.filter((id) => id !== permission.id) : [...current, permission.id])} />{permission.permission}</label>)}</div></section><div className="flex justify-end"><Button variant="primary" size="sm" isLoading={isSubmitting} onClick={() => void savePermissions()}>Save Permissions</Button></div></div></Modal>
     {actorRole === 'SUPER_ADMIN' && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs"><h2 className="text-lg font-bold text-slate-900">Role Permission Management</h2><p className="mb-4 text-xs text-slate-500">Manage inherited permissions once per role. Individual user grants remain separate.</p><div className="grid gap-4 md:grid-cols-[220px_1fr]"> <Select label="Role" value={managedRoleId} onChange={(event) => void loadRolePermissions(event.target.value)} options={[{ value: '', label: 'Select role' }, ...roles.map((role) => ({ value: role.id, label: role.name }))]} /><div className="grid gap-2 sm:grid-cols-2">{managedRoleId && permissions.map((permission) => <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-xs"><input type="checkbox" checked={managedRolePermissionIds.includes(permission.id)} onChange={() => setManagedRolePermissionIds((current) => current.includes(permission.id) ? current.filter((id) => id !== permission.id) : [...current, permission.id])} />{permission.permission}</label>)}</div></div>{managedRoleId && <div className="mt-4 flex justify-end"><Button variant="primary" size="sm" isLoading={isSubmitting} onClick={() => void saveRolePermissions()}>Save Role Permissions</Button></div>}</section>}
   </div>;
 };

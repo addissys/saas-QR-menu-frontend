@@ -50,6 +50,7 @@ import { AdminBranchesPage } from './pages/admin/AdminBranchesPage';
 import { AdminMenuItemsPage } from './pages/admin/AdminMenuItemsPage';
 import { AdminSearchPage } from './pages/admin/AdminSearchPage';
 import { AdminAuditLogsPage } from './pages/admin/AdminAuditLogsPage';
+import { AdminRolesPage } from './pages/admin/AdminRolesPage';
 
 export default function App() {
   const initAuth = useAuthStore((state) => state.initAuth);
@@ -163,6 +164,7 @@ export default function App() {
           <Route path="/admin/branches" element={<AdminBranchesPage />} />
           <Route path="/admin/menu-items" element={<AdminMenuItemsPage />} />
           <Route path="/admin/search" element={<AdminSearchPage />} />
+          <Route path="/admin/roles" element={<AdminRolesPage />} />
           <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
         </Route>
 

@@ -45,10 +45,10 @@ export const accessApi = {
     const tenantBranchIds = new Set(tenantBranches.data.map((branch) => branch.id));
 
     return mapped.filter(
-      (user) =>
-        user.tenantId === currentUser.tenantId ||
-        (user.branchId ? tenantBranchIds.has(user.branchId) : false) ||
-        user.assignedBranchIds?.some((branchId) => tenantBranchIds.has(branchId))
+      (entry: User) =>
+        entry.tenantId === currentUser.tenantId ||
+        (entry.branchId ? tenantBranchIds.has(entry.branchId) : false) ||
+        entry.assignedBranchIds?.some((bid: string) => tenantBranchIds.has(bid))
     );
   },
   getRoles: async (): Promise<RoleRecord[]> => {
@@ -57,6 +57,12 @@ export const accessApi = {
   },
   getPermissions: async (): Promise<PermissionRecord[]> => {
     const response = await api.get('/permissions');
+    return Array.isArray(response.data?.data) ? response.data.data : [];
+  },
+  // Returns only permissions the current actor is authorized to grant.
+  // Use this for the Additional Permissions assignment modal.
+  getGrantablePermissions: async (): Promise<PermissionRecord[]> => {
+    const response = await api.get('/permissions/grantable');
     return Array.isArray(response.data?.data) ? response.data.data : [];
   },
   getRolePermissions: async (roleId: string): Promise<PermissionRecord[]> => {
@@ -85,5 +91,19 @@ export const accessApi = {
   setUserPermissions: async (userId: string, permissionIds: string[]) => {
     const response = await api.post(`/users/${userId}/permissions`, { permission_ids: permissionIds });
     return response.data?.data ?? [];
+  },
+  revokeUserPermission: async (userId: string, permissionId: string) => {
+    await api.delete(`/users/${userId}/permissions/${permissionId}`);
+  },
+  createRole: async (payload: { name: string; description?: string }) => {
+    const response = await api.post('/roles', payload);
+    return response.data?.data;
+  },
+  updateRole: async (roleId: string, payload: { name?: string; description?: string }) => {
+    const response = await api.patch(`/roles/${roleId}`, payload);
+    return response.data?.data;
+  },
+  deleteRole: async (roleId: string) => {
+    await api.delete(`/roles/${roleId}`);
   },
 };

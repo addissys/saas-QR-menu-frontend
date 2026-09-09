@@ -13,10 +13,16 @@ import { Modal } from '../../components/ui/Modal';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { Table, Column } from '../../components/ui/Table';
 import { Plus, FolderTree, Edit3, Trash2 } from 'lucide-react';
+import { usePermission } from '../../hooks/usePermission';
 
 const CategoriesListPage: React.FC = () => {
   const { showToast } = useToast();
   const { user } = useAuth();
+  const { hasPermission } = usePermission();
+
+  const canCreate = hasPermission('categories.create');
+  const canUpdate = hasPermission('categories.update');
+  const canDelete = hasPermission('categories.delete');
 
   const normalizedRole = normalizeRole(user?.role);
   const isCafeOwner =
@@ -173,25 +179,35 @@ const CategoriesListPage: React.FC = () => {
         </span>
       ),
     },
-    {
-      header: 'Actions',
-      accessor: (c) => (
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => handleOpenEdit(c)}
-            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-          >
-            <Edit3 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setDeletingId(c.id)}
-            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
-      ),
-    },
+    ...(canUpdate || canDelete
+      ? [
+          {
+            header: 'Actions',
+            accessor: (c: Category) => (
+              <div className="flex items-center gap-1">
+                {canUpdate && (
+                  <button
+                    onClick={() => handleOpenEdit(c)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                    title="Edit Category"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    onClick={() => setDeletingId(c.id)}
+                    className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50"
+                    title="Delete Category"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -201,9 +217,11 @@ const CategoriesListPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-900">Menu Categories</h1>
           <p className="text-xs text-slate-500">Organize dishes into sections (e.g. Appetizers, Desserts, Cocktails)</p>
         </div>
-        <Button variant="primary" size="md" icon={Plus} onClick={handleOpenCreate}>
-          Create Category
-        </Button>
+        {canCreate && (
+          <Button variant="primary" size="md" icon={Plus} onClick={handleOpenCreate}>
+            Create Category
+          </Button>
+        )}
       </div>
 
       {/* Branch selector for Cafe Owners */}

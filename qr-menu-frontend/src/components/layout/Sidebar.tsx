@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { usePermission } from '../../hooks/usePermission';
 import { normalizeRole } from '../../utils/roles';
 import {
   LayoutDashboard,
@@ -24,62 +25,68 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isAdmin = false, onCloseMobile }) => {
   const { user, logout } = useAuth();
+  const { hasPermission, hasAnyPermission } = usePermission();
+  const normalizedRole = normalizeRole(user?.role);
 
   const getNavItems = () => {
-    if (isAdmin || user?.role === 'SUPER_ADMIN') {
+    if (isAdmin || normalizedRole === 'SUPER_ADMIN') {
       return [
         { name: 'Admin Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
         { name: 'Tenants Directory', path: '/admin/restaurants', icon: Store },
-        { name: 'Audit Logs', path: '/admin/audit-logs', icon: ShieldAlert },
+        { name: 'Role Management', path: '/admin/roles', icon: ShieldAlert },
+        { name: 'Audit Logs', path: '/admin/audit-logs', icon: FileSpreadsheet },
       ];
     }
 
-    if (user?.role === 'STAFF') {
-      return [
-        { name: 'Dishes & Stock Availability', path: '/menu-items', icon: UtensilsCrossed },
-        { name: 'Notifications', path: '/notifications', icon: Bell },
-      ];
+    const items: { name: string; path: string; icon: typeof LayoutDashboard }[] = [];
+
+    // Dashboard — always visible
+    items.push({ name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard });
+
+    // Restaurant Info — owner roles
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER'].includes(normalizedRole)) {
+      items.push({ name: 'Restaurant Info', path: '/restaurants', icon: Store });
     }
 
-    if (user?.role === 'BRANCH_MANAGER') {
-      return [
-        { name: 'Branch Operations', path: '/dashboard', icon: LayoutDashboard },
-        { name: 'Branch Info', path: '/branches', icon: GitBranch },
-        { name: 'User Management', path: '/staff-members', icon: Users },
-        { name: 'Branch Tables', path: '/tables', icon: TableIcon },
-        { name: 'QR Codes Generator', path: '/qr-codes', icon: QrCode },
-        { name: 'Menu Categories', path: '/categories', icon: FolderTree },
-        { name: 'Dishes & Menu Catalog', path: '/menu-items', icon: UtensilsCrossed },
-        { name: 'Notifications', path: '/notifications', icon: Bell },
-      ];
+    // Branches
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasPermission('branches.read')) {
+      items.push({ name: 'Branches', path: '/branches', icon: GitBranch });
     }
 
-    if (user?.role === 'EXECUTIVE') {
-      return [
-        { name: 'Executive Overview', path: '/dashboard', icon: LayoutDashboard },
-        { name: 'Assigned Branches', path: '/branches', icon: GitBranch },
-        { name: 'User Management', path: '/staff-members', icon: Users },
-        { name: 'Tables Management', path: '/tables', icon: TableIcon },
-        { name: 'QR Codes Generator', path: '/qr-codes', icon: QrCode },
-        { name: 'Menu Categories', path: '/categories', icon: FolderTree },
-        { name: 'Dishes & Menu Catalog', path: '/menu-items', icon: UtensilsCrossed },
-        { name: 'Notifications', path: '/notifications', icon: Bell },
-      ];
+    // User Management
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasPermission('users.read')) {
+      items.push({ name: 'User Management', path: '/staff-members', icon: Users });
     }
 
-    // Default: RESTAURANT_OWNER / CAFE_OWNER / OWNER
-    return [
-      { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-      { name: 'Restaurant Info', path: '/restaurants', icon: Store },
-      { name: 'Branches', path: '/branches', icon: GitBranch },
-      { name: 'User Management', path: '/staff-members', icon: Users },
-      { name: 'Tables Management', path: '/tables', icon: TableIcon },
-      { name: 'QR Codes Generator', path: '/qr-codes', icon: QrCode },
-      { name: 'Menu Categories', path: '/categories', icon: FolderTree },
-      { name: 'Dishes & Menu Items', path: '/menu-items', icon: UtensilsCrossed },
-      { name: 'Notifications', path: '/notifications', icon: Bell },
-      { name: 'Audit Trail', path: '/audit-logs', icon: FileSpreadsheet },
-    ];
+    // Tables
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasPermission('tables.read')) {
+      items.push({ name: 'Tables Management', path: '/tables', icon: TableIcon });
+    }
+
+    // QR Codes
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasPermission('qr_codes.read')) {
+      items.push({ name: 'QR Codes Generator', path: '/qr-codes', icon: QrCode });
+    }
+
+    // Categories
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasPermission('categories.read')) {
+      items.push({ name: 'Menu Categories', path: '/categories', icon: FolderTree });
+    }
+
+    // Dishes & Menu Catalog — visible when user has any menu_items permission or has a management role
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER', 'EXECUTIVE', 'BRANCH_MANAGER'].includes(normalizedRole) || hasAnyPermission('menu_items.read', 'menu_items.create', 'menu_items.update', 'menu_items.delete')) {
+      items.push({ name: 'Dishes & Menu Catalog', path: '/menu-items', icon: UtensilsCrossed });
+    }
+
+    // Notifications — always visible
+    items.push({ name: 'Notifications', path: '/notifications', icon: Bell });
+
+    // Audit Trail — owner roles or audit log permission
+    if (['CAFE_OWNER', 'OWNER', 'RESTAURANT_OWNER'].includes(normalizedRole) || hasPermission('audit_logs.read')) {
+      items.push({ name: 'Audit Trail', path: '/audit-logs', icon: FileSpreadsheet });
+    }
+
+    return items;
   };
 
   const navItems = getNavItems();

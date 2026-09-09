@@ -529,6 +529,53 @@ export const DashboardPage: React.FC = () => {
         </div>
       </motion.div>
 
+      {/* Branch Manager Assigned Branch Card */}
+      {user?.role === 'BRANCH_MANAGER' && (
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.05 }}
+          className="bg-white rounded-3xl border border-slate-200/80 shadow-md shadow-slate-200/50 p-6 sm:p-8"
+        >
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-sky-50 text-sky-600 rounded-xl border border-sky-100">
+                <Building className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-slate-900 tracking-tight">Assigned Branch</h2>
+                <p className="text-xs text-slate-500">Read-only operational venue details</p>
+              </div>
+            </div>
+            <span className="px-3 py-1 bg-sky-50 text-sky-700 text-xs font-bold rounded-full border border-sky-200">
+              Assigned Venue
+            </span>
+          </div>
+
+          {assignedBranches.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Branch</p>
+                <p className="text-base font-black text-slate-900 mt-1">{assignedBranches[0]?.name}</p>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Location</p>
+                <p className="text-sm font-bold text-slate-800 mt-1">
+                  {assignedBranches[0]?.address}
+                  {assignedBranches[0]?.city ? `, ${assignedBranches[0].city}` : ''}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 text-center">
+              <p className="text-sm font-semibold text-slate-600">No branch is currently assigned to your account.</p>
+              <p className="text-xs text-slate-400 mt-1">Please contact your administrator to assign a branch venue.</p>
+            </div>
+          )}
+        </motion.div>
+      )}
+
       {/* Stats Cards with Hover Elevation */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}

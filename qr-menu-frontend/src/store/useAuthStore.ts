@@ -23,6 +23,7 @@ interface RawUser {
   branch?: { id?: string; tenant_id?: string };
   executive_branches?: { id?: string; branch_id?: string; branch?: { id?: string } }[];
   staff_profile?: { branch_id?: string; branch?: { id?: string; tenant_id?: string } }[];
+  permissions?: string[];
   is_active?: boolean;
   isActive?: boolean;
   created_at?: string;
@@ -50,6 +51,7 @@ const mapRawUser = (raw: RawUser): User => ({
     raw.executive_branches?.map((branch) => branch.branch?.id ?? branch.branch_id ?? branch.id).filter((id): id is string => Boolean(id)) ??
     raw.staff_profile?.map((profile) => profile.branch_id).filter((id): id is string => Boolean(id)) ??
     (raw.branchId || raw.branch_id || raw.branch?.id ? [raw.branchId ?? raw.branch_id ?? raw.branch?.id!] : []),
+  permissions: raw.permissions ?? [],
   isActive: raw.is_active ?? raw.isActive ?? true,
   createdAt: raw.created_at ?? raw.createdAt ?? new Date().toISOString(),
 });

@@ -19,6 +19,7 @@ export interface User {
   profileImage?: string;
   role: UserRole;
   assignedBranchIds?: string[];
+  permissions?: string[];
   isActive: boolean;
   createdAt: string;
 }
